@@ -1,0 +1,23 @@
+{
+  "name": "offerben",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OfferBen - AI job-application copilot (resume tailoring MVP). Offer Max-style, monorepo.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @offerben/web",
+    "build": "npm run build -w @offerben/web",
+    "start": "npm run start -w @offerben/web",
+    "lint": "npm run lint -w @offerben/web",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
