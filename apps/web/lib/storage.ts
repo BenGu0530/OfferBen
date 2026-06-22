@@ -33,6 +33,14 @@ function write(key: string, value: unknown): void {
   }
 }
 
+export interface BackupFile {
+  app: "offerben";
+  version: 1;
+  exportedAt: string;
+  profile: Profile | null;
+  job: Job | null;
+}
+
 export const storage = {
   loadProfile: () => read<Profile>(KEYS.profile),
   saveProfile: (p: Profile) => write(KEYS.profile, p),
@@ -40,5 +48,28 @@ export const storage = {
   saveJob: (j: Job) => write(KEYS.job, j),
   clearProfile: () => {
     if (typeof window !== "undefined") window.localStorage.removeItem(KEYS.profile);
+  },
+
+  /** Serialize everything to a portable JSON string (for cross-machine backup). */
+  exportAll(): string {
+    const data: BackupFile = {
+      app: "offerben",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      profile: read<Profile>(KEYS.profile),
+      job: read<Job>(KEYS.job),
+    };
+    return JSON.stringify(data, null, 2);
+  },
+
+  /** Load a previously exported backup. Returns the parsed payload. */
+  importAll(json: string): BackupFile {
+    const parsed = JSON.parse(json) as Partial<BackupFile>;
+    if (parsed.app !== "offerben") {
+      throw new Error("This file is not an OfferBen backup.");
+    }
+    if (parsed.profile) write(KEYS.profile, parsed.profile);
+    if (parsed.job) write(KEYS.job, parsed.job);
+    return parsed as BackupFile;
   },
 };

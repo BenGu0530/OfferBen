@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OfferBen</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="head">
+      <div class="logo">O</div>
+      <div>
+        <div class="title">OfferBen</div>
+        <div class="subtitle">Capture this job</div>
+      </div>
+    </header>
+
+    <main id="main">
+      <div id="status" class="status">Reading the page…</div>
+
+      <div id="captured" class="hidden">
+        <label class="lbl">Title</label>
+        <input id="f-title" class="inp" type="text" />
+
+        <label class="lbl">Company</label>
+        <input id="f-company" class="inp" type="text" />
+
+        <label class="lbl">Description <span id="charcount" class="muted"></span></label>
+        <textarea id="f-desc" class="inp ta" rows="6"></textarea>
+
+        <button id="open" class="btn primary">Open in OfferBen →</button>
+        <button id="recapture" class="btn ghost">Re-capture</button>
+      </div>
+    </main>
+
+    <footer class="foot">
+      <label class="lbl">OfferBen app URL</label>
+      <input id="app-url" class="inp small" type="text" placeholder="http://localhost:3000" />
+    </footer>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

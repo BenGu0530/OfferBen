@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { BackupControls } from "@/components/BackupControls";
 import { GenerateStep } from "@/components/GenerateStep";
 import { JobStep } from "@/components/JobStep";
 import { MatchStep } from "@/components/MatchStep";
 import { ProfileStep } from "@/components/ProfileStep";
 import { Stepper, type StepDef } from "@/components/Stepper";
+import { readJobFromUrl } from "@/lib/handoff";
 import { storage } from "@/lib/storage";
 import type { Job, MatchResult, ParsedJob, Profile } from "@/lib/types";
 
@@ -25,11 +27,22 @@ export default function HomePage() {
   const [parsed, setParsed] = useState<ParsedJob | null>(null);
   const [match, setMatch] = useState<MatchResult | null>(null);
 
-  // hydrate from localStorage once on mount
+  // hydrate from localStorage once on mount; an incoming job (from the browser
+  // extension handoff via URL) takes precedence and jumps straight to the job step.
   useEffect(() => {
     const p = storage.loadProfile();
-    const j = storage.loadJob();
     if (p) setProfileState(p);
+
+    const incoming = readJobFromUrl();
+    if (incoming) {
+      setJobState(incoming);
+      storage.saveJob(incoming);
+      if (p) setStep(2);
+      else setStep(0);
+      return;
+    }
+
+    const j = storage.loadJob();
     if (j) setJobState(j);
   }, []);
 
@@ -69,9 +82,20 @@ export default function HomePage() {
               </p>
             </div>
           </div>
-          <span className="chip border-white/10 bg-white/5 text-slate-300">
-            Local · Gemini
-          </span>
+          <div className="flex items-center gap-3">
+            <BackupControls
+              onImported={({ profile: p, job: j }) => {
+                if (p) setProfileState(p);
+                if (j) setJobState(j);
+                setParsed(null);
+                setMatch(null);
+                setStep(0);
+              }}
+            />
+            <span className="chip hidden border-white/10 bg-white/5 text-slate-300 sm:inline-flex">
+              Local · Gemini
+            </span>
+          </div>
         </div>
       </header>
 

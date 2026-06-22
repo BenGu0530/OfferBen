@@ -1,0 +1,141 @@
+:root {
+  --bg: #0b1020;
+  --card: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.1);
+  --text: #e8ecf6;
+  --muted: #93a0bd;
+  --brand: #6366f1;
+  --brand-hover: #818cf8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 340px;
+  margin: 0;
+  padding: 14px;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    13px/1.45 ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.logo {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: white;
+  background: linear-gradient(135deg, var(--brand), #38bdf8);
+}
+
+.title {
+  font-weight: 700;
+}
+
+.subtitle,
+.muted {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.status {
+  padding: 18px 4px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.status.error {
+  color: #fca5a5;
+}
+
+.lbl {
+  display: block;
+  margin: 10px 0 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.inp {
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(8, 12, 26, 0.6);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+
+.inp:focus {
+  border-color: var(--brand-hover);
+}
+
+.inp.small {
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.ta {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: var(--brand);
+  color: white;
+}
+
+.btn.primary:hover {
+  background: var(--brand-hover);
+}
+
+.btn.ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.btn.ghost:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.foot {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.hidden {
+  display: none;
+}

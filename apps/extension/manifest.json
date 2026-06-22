@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "OfferBen — Job Capture",
+  "version": "0.1.0",
+  "description": "Capture a job description from any career page and send it to OfferBen for AI resume tailoring.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "action": {
+    "default_title": "OfferBen — capture this job",
+    "default_popup": "popup.html"
+  }
+}
