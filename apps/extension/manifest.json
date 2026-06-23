@@ -1,11 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "OfferBen — Job Capture",
-  "version": "0.1.0",
-  "description": "Capture a job description from any career page and send it to OfferBen for AI resume tailoring.",
-  "permissions": ["activeTab", "scripting", "storage"],
+  "name": "OfferBen — Job Copilot",
+  "version": "0.2.0",
+  "description": "A side-panel copilot that reads the job you're viewing and tailors your application — your data stays in your own Google Drive.",
+  "permissions": ["activeTab", "scripting", "storage", "sidePanel", "tabs", "identity"],
+  "host_permissions": ["https://*/*", "http://*/*"],
+  "background": { "service_worker": "background.js" },
   "action": {
-    "default_title": "OfferBen — capture this job",
-    "default_popup": "popup.html"
+    "default_title": "Open the OfferBen side panel"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
   }
 }

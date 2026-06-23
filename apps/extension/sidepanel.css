@@ -1,0 +1,287 @@
+:root {
+  --bg: #0b1020;
+  --card: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.1);
+  --text: #e8ecf6;
+  --muted: #93a0bd;
+  --brand: #6366f1;
+  --brand-hover: #818cf8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    13px/1.45 ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.grow {
+  flex: 1;
+}
+
+.logo {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: white;
+  background: linear-gradient(135deg, var(--brand), #38bdf8);
+}
+
+.title {
+  font-weight: 700;
+}
+
+.subtitle,
+.muted {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.icon-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+#main {
+  flex: 1;
+}
+
+.status {
+  padding: 24px 8px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.status.error {
+  color: #fca5a5;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.lbl {
+  display: block;
+  margin: 10px 0 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.inp {
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(8, 12, 26, 0.6);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+
+.inp:focus {
+  border-color: var(--brand-hover);
+}
+
+.inp.small {
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.ta {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: var(--brand);
+  color: white;
+}
+
+.btn.primary:hover {
+  background: var(--brand-hover);
+}
+
+.foot {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.hidden {
+  display: none;
+}
+
+.card {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+}
+
+.card p {
+  margin: 0 0 12px;
+}
+
+/* score card */
+.scorecard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 12px;
+}
+
+.score {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 800;
+  border: 3px solid var(--border);
+}
+
+.score.good {
+  color: #4ade80;
+  border-color: #4ade80;
+}
+.score.ok {
+  color: #fbbf24;
+  border-color: #fbbf24;
+}
+.score.low {
+  color: #fca5a5;
+  border-color: #fca5a5;
+}
+
+.scoremeta {
+  flex: 1;
+  min-width: 0;
+}
+
+.verdict {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 2px;
+}
+
+.block {
+  margin-top: 14px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chips .chip {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.bullets {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.bullets li {
+  margin-bottom: 6px;
+}
+
+.btn.small {
+  width: auto;
+  padding: 6px 10px;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+details summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.autofill-bar {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.autofill-bar .btn {
+  width: 100%;
+  margin-top: 0;
+}

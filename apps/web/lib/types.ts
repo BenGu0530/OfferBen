@@ -15,7 +15,20 @@ export type {
   ReferralQA,
   ReferralQAItem,
   LetterKind,
+  AppData,
+  ApplicationRecord,
+  ApplicationStatus,
 } from "@offerben/core";
+
+// Local copy of the status list (a runtime value). Defined here rather than
+// imported from core so the client bundle never pulls in core's server runtime.
+export const APPLICATION_STATUSES = [
+  "saved",
+  "applied",
+  "interviewing",
+  "rejected",
+  "offer",
+] as const;
 
 export type LetterOrQAKind =
   | "coverLetter"

@@ -91,24 +91,45 @@ Supabase (optional).
       machine (no cloud needed).
 - [x] Extension → web handoff: web app reads a `?job=` URL param to pre-fill a
       captured job.
+- [x] Provider-agnostic storage layer (`packages/core/src/storage`): `ProfileStore`
+      interface + `GoogleDriveStore` (least-privilege `drive.file` scope).
+- [x] Google Drive sync in the web app (opt-in): each user syncs their profile to
+      **their own** Drive via Google Identity Services. Local stays the default;
+      Drive buttons appear only when `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is set.
+- [x] Application tracker: save scored jobs (score/verdict/status/date), edit
+      status (saved→applied→interviewing→rejected→offer), syncs in AppData to Drive.
+- [x] Editable profile: fix name/headline/email/phone/skills after AI extraction.
 
 ### Phase 2 — Extension (partial)
 - [x] MV3 manifest + popup UI (capture, edit, send).
 - [x] JD extraction adapters: Greenhouse, Lever, Ashby, Workday + generic fallback.
 - [x] "Open in OfferBen" handoff (key stays server-side).
+- [x] **Side Panel UI** (v0.2): docks next to the live job page and auto-reads it
+      as the user browses (no copy-paste / no window arranging). Chrome/Edge 114+.
+      Reuses the `extract.js` adapters; popup kept as legacy.
 
 ---
 
 ## 5. In progress / Next up 🟡
 
 ### Phase 2 — finish the extension
-- [ ] **Autofill application forms** — the big one. Field-mapping registry per ATS
-      (name, email, phone, LinkedIn, work authorization / EEO answers).
+- [x] **Inline match score in the side panel** — reads the JD and scores it
+      against the synced profile in-panel; caches per URL (revisits cost 0 calls).
+- [x] **Profile in the panel via Google Drive** — panel reads the profile from the
+      user's Drive (`offerben-data.json`) via chrome.identity; cached locally.
+- [x] **Screenshot + vision fallback** — when DOM read fails, `captureVisibleTab`
+      → `/api/capture` → vision model (`extractJobFromImage`). Gated to explicit
+      open/⟳ so silent navigations don't burn quota. A robustness fallback, *not*
+      a scraping shortcut (user-initiated, single-page).
+- [~] **Autofill application forms** — skeleton shipped: heuristic contact-field
+      filler (name/email/phone/LinkedIn/location) with a review-before-submit note.
+      Next: per-ATS field-mapping registry + work-authorization / EEO answers.
 - [ ] Extract this into a `packages/ats-adapters` package shared by capture + autofill.
 - [ ] Inline match score badge on the job page (no need to open the app).
 - [ ] One-click read of the user's own LinkedIn profile (in their logged-in browser).
 - [ ] Migrate extension to WXT + React + TypeScript so it can import
-      `@offerben/core` directly (needs a bundler step).
+      `@offerben/core` directly (needs a bundler step) — also lets the extension
+      reuse `GoogleDriveStore` for its own Drive sync.
 - [ ] Extension icons + store-ready packaging.
 
 ---
@@ -146,7 +167,7 @@ Supabase (optional).
 | Tailored resume + letters | ✅ | ✅ | — |
 | Autofill application forms | ✅ | ❌ | Phase 2 |
 | Interview question prep | ✅ | ❌ | Phase 4 |
-| Cloud sync / multi-device | ✅ (Supabase) | ❌ (local only) | when needed |
+| Cloud sync / multi-device | ✅ (Supabase) | 🟡 (Google Drive sync in web app; needs OAuth client id) | Drive now · Supabase later |
 | Saved application history | ✅ | ❌ | Phase 3 / persistence |
 
 ### Other current limitations
@@ -182,3 +203,15 @@ Extension: `chrome://extensions` → Developer mode → Load unpacked → `apps/
 - **Submission via review gate (not full auto)**: higher quality, avoids bans and
   wasted single-shot applications.
 - **Key stays server-side**: extension hands off via URL; never holds the key.
+- **Provider-agnostic AI, env-driven**: one `OpenAICompatibleProvider` covers
+  OpenAI/Groq/OpenRouter/DeepSeek/Ollama/self-hosted fine-tunes; `AI_PROVIDER`
+  selects the backend. Swapping models is config, not code — so we're not locked
+  to Gemini (whose free tier is only 20 req/day/model).
+- **Match = 1 AI call**: dropped the separate parseJob; keyword data is derived
+  from the match result. Extension caches scores per URL (revisits cost 0 calls)
+  to stretch the free tier.
+- **Cloud sync = user's own Google Drive (not our server)**: chose "bring your own
+  storage" so the published app never holds anyone's resume PII, needs no backend,
+  and works for everyone for free. Uses the least-privilege `drive.file` scope
+  (app sees only its own file) to stay out of Google's costly `restricted`-scope
+  CASA security review. Local mode remains the default; Drive is opt-in.

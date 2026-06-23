@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
-import type { Job, MatchResult, ParsedJob, Profile } from "@/lib/types";
+import { storage } from "@/lib/storage";
+import type { ApplicationRecord, Job, MatchResult, ParsedJob, Profile } from "@/lib/types";
 import { Chip, ErrorBanner, SectionTitle, Spinner } from "./ui";
 
 export function MatchStep({
@@ -12,6 +13,7 @@ export function MatchStep({
   onResult,
   onBack,
   onNext,
+  onTrackerChange,
 }: {
   profile: Profile;
   job: Job;
@@ -19,10 +21,34 @@ export function MatchStep({
   onResult: (parsed: ParsedJob, match: MatchResult) => void;
   onBack: () => void;
   onNext: () => void;
+  onTrackerChange?: (list: ApplicationRecord[]) => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const ran = useRef(false);
+
+  function saveToTracker() {
+    if (!match) return;
+    const id = job.url || `${job.company}::${job.title}`;
+    const existing = storage.loadApplications().find((a) => a.id === id);
+    const now = new Date().toISOString();
+    const list = storage.saveApplication({
+      id,
+      title: job.title,
+      company: job.company,
+      url: job.url,
+      score: match.score,
+      verdict: match.verdict,
+      status: existing?.status ?? "saved",
+      notes: existing?.notes,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    });
+    onTrackerChange?.(list);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
 
   async function run() {
     setError(null);
@@ -78,9 +104,14 @@ export function MatchStep({
         </button>
         <div className="flex gap-2">
           {match ? (
-            <button type="button" className="btn-ghost" onClick={run} disabled={loading}>
-              Re-run
-            </button>
+            <>
+              <button type="button" className="btn-ghost" onClick={run} disabled={loading}>
+                Re-run
+              </button>
+              <button type="button" className="btn-ghost" onClick={saveToTracker}>
+                {saved ? "Saved ✓" : "Save to tracker"}
+              </button>
+            </>
           ) : null}
           <button
             type="button"

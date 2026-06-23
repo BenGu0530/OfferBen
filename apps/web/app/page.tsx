@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ApplicationsView } from "@/components/ApplicationsView";
 import { BackupControls } from "@/components/BackupControls";
 import { GenerateStep } from "@/components/GenerateStep";
 import { JobStep } from "@/components/JobStep";
@@ -9,7 +10,7 @@ import { ProfileStep } from "@/components/ProfileStep";
 import { Stepper, type StepDef } from "@/components/Stepper";
 import { readJobFromUrl } from "@/lib/handoff";
 import { storage } from "@/lib/storage";
-import type { Job, MatchResult, ParsedJob, Profile } from "@/lib/types";
+import type { ApplicationRecord, Job, MatchResult, ParsedJob, Profile } from "@/lib/types";
 
 const STEPS: StepDef[] = [
   { id: "profile", label: "Profile" },
@@ -22,16 +23,19 @@ const EMPTY_JOB: Job = { title: "", company: "", description: "" };
 
 export default function HomePage() {
   const [step, setStep] = useState(0);
+  const [view, setView] = useState<"wizard" | "tracker">("wizard");
   const [profile, setProfileState] = useState<Profile | null>(null);
   const [job, setJobState] = useState<Job>(EMPTY_JOB);
   const [parsed, setParsed] = useState<ParsedJob | null>(null);
   const [match, setMatch] = useState<MatchResult | null>(null);
+  const [applications, setApplications] = useState<ApplicationRecord[]>([]);
 
   // hydrate from localStorage once on mount; an incoming job (from the browser
   // extension handoff via URL) takes precedence and jumps straight to the job step.
   useEffect(() => {
     const p = storage.loadProfile();
     if (p) setProfileState(p);
+    setApplications(storage.loadApplications());
 
     const incoming = readJobFromUrl();
     if (incoming) {
@@ -83,10 +87,18 @@ export default function HomePage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="btn-ghost px-2.5 py-1 text-xs"
+              onClick={() => setView((v) => (v === "tracker" ? "wizard" : "tracker"))}
+            >
+              {view === "tracker" ? "← Back to wizard" : `Applications (${applications.length})`}
+            </button>
             <BackupControls
               onImported={({ profile: p, job: j }) => {
                 if (p) setProfileState(p);
                 if (j) setJobState(j);
+                setApplications(storage.loadApplications());
                 setParsed(null);
                 setMatch(null);
                 setStep(0);
@@ -99,6 +111,10 @@ export default function HomePage() {
         </div>
       </header>
 
+      {view === "tracker" ? (
+        <ApplicationsView applications={applications} onChange={setApplications} />
+      ) : (
+      <>
       <div className="mb-6">
         <Stepper
           steps={STEPS}
@@ -136,6 +152,7 @@ export default function HomePage() {
           }}
           onBack={() => setStep(1)}
           onNext={() => setStep(3)}
+          onTrackerChange={setApplications}
         />
       )}
 
@@ -147,6 +164,8 @@ export default function HomePage() {
           match={match}
           onBack={() => setStep(2)}
         />
+      )}
+      </>
       )}
 
       <footer className="mt-12 text-center text-xs text-slate-600">

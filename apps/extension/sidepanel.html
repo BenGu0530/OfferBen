@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OfferBen</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header class="head">
+      <div class="logo">O</div>
+      <div class="grow">
+        <div class="title">OfferBen</div>
+        <div class="subtitle" id="jobline">Reads &amp; scores the job you're viewing</div>
+      </div>
+      <button id="reread" class="icon-btn" title="Re-scan this page">⟳</button>
+    </header>
+
+    <main id="main">
+      <!-- transient status / empty states -->
+      <div id="status" class="status">Open a job posting — I'll score it automatically.</div>
+
+      <!-- connect-profile prompt (shown when no profile is synced yet) -->
+      <section id="connect" class="hidden card">
+        <p class="muted">To score jobs, connect the profile you saved to Google Drive in the OfferBen web app.</p>
+        <button id="connect-btn" class="btn primary">Connect my Drive profile</button>
+      </section>
+
+      <!-- match result -->
+      <section id="result" class="hidden">
+        <div class="scorecard">
+          <div id="score" class="score">–</div>
+          <div class="scoremeta">
+            <div id="verdict" class="verdict">—</div>
+            <div id="summary" class="muted"></div>
+          </div>
+        </div>
+
+        <div class="block">
+          <div class="lbl">Matched</div>
+          <div id="matched" class="chips"></div>
+        </div>
+        <div class="block">
+          <div class="lbl">Missing</div>
+          <div id="missing" class="chips"></div>
+        </div>
+        <div class="block">
+          <div class="lbl">Do this</div>
+          <ul id="suggestions" class="bullets"></ul>
+        </div>
+
+        <button id="open" class="btn primary">Tailor resume &amp; letters →</button>
+      </section>
+    </main>
+
+    <!-- always-available: works on application form pages too -->
+    <div class="autofill-bar">
+      <button id="autofill" class="btn ghost small">⚡ Autofill this form</button>
+    </div>
+
+    <footer class="foot">
+      <details>
+        <summary class="muted">Settings</summary>
+        <label class="lbl">OfferBen app URL</label>
+        <input id="app-url" class="inp small" type="text" placeholder="http://localhost:3000" />
+        <button id="resync" class="btn ghost small">Re-sync profile from Drive</button>
+      </details>
+    </footer>
+
+    <script src="drive.js"></script>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

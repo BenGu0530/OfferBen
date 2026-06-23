@@ -1,7 +1,6 @@
 import {
   createAIProvider,
   JobSchema,
-  parseJob,
   ProfileSchema,
   scoreMatch,
 } from "@offerben/core";
@@ -23,7 +22,20 @@ export const POST = jsonHandler<Body>(async (body) => {
     throw new Error("Add a job description first.");
   }
   const ai = createAIProvider();
-  const parsed = await parseJob(ai, job);
-  const match = await scoreMatch(ai, { profile, job, parsed });
+  // Single AI call (was 2: parseJob + scoreMatch). The match result already
+  // surfaces matched/missing keywords, so we synthesize a lightweight ParsedJob
+  // from it for the downstream tailor step instead of spending a 2nd request —
+  // important on Gemini's stingy free tier.
+  const match = await scoreMatch(ai, { profile, job });
+  const parsed = {
+    title: job.title,
+    company: job.company,
+    summary: match.summary ?? "",
+    responsibilities: [],
+    requiredSkills: match.missingKeywords ?? [],
+    niceToHaveSkills: [],
+    qualifications: [],
+    keywords: [...(match.matchedKeywords ?? []), ...(match.missingKeywords ?? [])],
+  };
   return { parsed, match };
 });

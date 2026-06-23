@@ -7,6 +7,7 @@ export * from "./ai/index";
 // Operations
 export { extractProfile, type ExtractProfileInput } from "./profile/extract";
 export { parseJob } from "./jd/parse";
+export { extractJobFromImage, type CapturedJob } from "./jd/vision";
 export { scoreMatch, type ScoreMatchInput } from "./match/score";
 export { tailorResume, type TailorResumeInput } from "./tailor/resume";
 export {
@@ -18,3 +19,6 @@ export {
 
 // Utilities
 export { clamp, compact, compactProfile } from "./util/object";
+
+// Storage backends (local / Google Drive) — provider-agnostic persistence
+export * from "./storage/index";

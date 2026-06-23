@@ -113,16 +113,137 @@ export function ProfileStep({
       </div>
 
       {profile ? (
-        <div className="card p-5">
-          <SectionTitle hint="Looks right? Continue">Extracted profile</SectionTitle>
+        <ProfileCard profile={profile} onChange={onChange} onNext={onNext} />
+      ) : null}
+    </div>
+  );
+}
+
+function ProfileCard({
+  profile,
+  onChange,
+  onNext,
+}: {
+  profile: Profile;
+  onChange: (p: Profile) => void;
+  onNext: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  return (
+    <div className="card p-5">
+      <SectionTitle hint={editing ? "Fix anything the AI got wrong" : "Looks right? Continue"}>
+        {editing ? "Edit profile" : "Extracted profile"}
+      </SectionTitle>
+      {editing ? (
+        <ProfileEditor
+          profile={profile}
+          onSave={(p) => {
+            onChange(p);
+            setEditing(false);
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <>
           <ProfilePreview profile={profile} />
-          <div className="mt-5 flex justify-end">
+          <div className="mt-5 flex justify-end gap-2">
+            <button type="button" className="btn-ghost" onClick={() => setEditing(true)}>
+              Edit
+            </button>
             <button type="button" className="btn-primary" onClick={onNext}>
               Continue to job →
             </button>
           </div>
-        </div>
-      ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+function flattenedSkills(profile: Profile): string[] {
+  return profile.skills.flatMap((s) => (s.keywords.length ? s.keywords : s.name ? [s.name] : []));
+}
+
+function ProfileEditor({
+  profile,
+  onSave,
+  onCancel,
+}: {
+  profile: Profile;
+  onSave: (p: Profile) => void;
+  onCancel: () => void;
+}) {
+  const b = profile.basics;
+  const [name, setName] = useState(b.name ?? "");
+  const [label, setLabel] = useState(b.label ?? "");
+  const [email, setEmail] = useState(b.email ?? "");
+  const [phone, setPhone] = useState(b.phone ?? "");
+  const [skills, setSkills] = useState(flattenedSkillsText(profile));
+
+  function save() {
+    const skillList = skills
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    onSave({
+      ...profile,
+      basics: { ...profile.basics, name, label, email, phone },
+      skills: skillList.map((s) => ({ name: s, keywords: [] })),
+    });
+  }
+
+  return (
+    <div className="space-y-4 text-sm">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Name" value={name} onChange={setName} />
+        <Field label="Headline" value={label} onChange={setLabel} placeholder="e.g. Robotics MS @ CMU" />
+        <Field label="Email" value={email} onChange={setEmail} />
+        <Field label="Phone" value={phone} onChange={setPhone} />
+      </div>
+      <div>
+        <span className="label">Skills (comma or line separated)</span>
+        <textarea
+          className="input h-28 resize-none scroll-thin"
+          value={skills}
+          onChange={(e) => setSkills(e.target.value)}
+        />
+      </div>
+      <div className="flex justify-end gap-2">
+        <button type="button" className="btn-ghost" onClick={onCancel}>
+          Cancel
+        </button>
+        <button type="button" className="btn-primary" onClick={save}>
+          Save changes
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function flattenedSkillsText(profile: Profile): string {
+  return flattenedSkills(profile).join(", ");
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <span className="label">{label}</span>
+      <input
+        className="input"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </div>
   );
 }
