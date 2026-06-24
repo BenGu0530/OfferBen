@@ -121,9 +121,11 @@ Supabase (optional).
       → `/api/capture` → vision model (`extractJobFromImage`). Gated to explicit
       open/⟳ so silent navigations don't burn quota. A robustness fallback, *not*
       a scraping shortcut (user-initiated, single-page).
-- [~] **Autofill application forms** — skeleton shipped: heuristic contact-field
-      filler (name/email/phone/LinkedIn/location) with a review-before-submit note.
-      Next: per-ATS field-mapping registry + work-authorization / EEO answers.
+- [~] **Autofill application forms** — v2: fills contact + website + current
+      company/title + school/degree/field + city/state/country across inputs,
+      textareas, and `<select>`s; deliberately SKIPS sensitive fields (work auth,
+      sponsorship, EEO, salary) and reports how many it left for the human.
+      Next: per-ATS field-mapping registry for tricky layouts (Workday, Ashby).
 - [ ] Extract this into a `packages/ats-adapters` package shared by capture + autofill.
 - [ ] Inline match score badge on the job page (no need to open the app).
 - [ ] One-click read of the user's own LinkedIn profile (in their logged-in browser).

@@ -184,11 +184,14 @@ async function run({ silent = false, force = false } = {}) {
   }
 }
 
-// --- autofill (skeleton) ---------------------------------------------------
+// --- autofill (v2) ---------------------------------------------------------
 
 // Build the value map the page filler matches against, from the profile.
 function autofillValues(profile) {
   const b = (profile && profile.basics) || {};
+  const loc = b.location || {};
+  const work0 = (profile && profile.work && profile.work[0]) || {};
+  const edu0 = (profile && profile.education && profile.education[0]) || {};
   const full = (b.name || "").trim();
   const parts = full.split(/\s+/);
   const linkedin = (b.profiles || []).find((p) =>
@@ -201,55 +204,94 @@ function autofillValues(profile) {
     email: b.email || "",
     phone: b.phone || "",
     linkedin: (linkedin && linkedin.url) || "",
-    location: (b.location && (b.location.city || b.location.address)) || "",
+    website: b.url || "",
+    city: loc.city || "",
+    state: loc.region || "",
+    country: loc.countryCode || "",
+    address: loc.address || "",
+    currentCompany: work0.name || "",
+    currentTitle: work0.position || "",
+    school: edu0.institution || "",
+    degree: edu0.studyType || "",
+    fieldOfStudy: edu0.area || "",
   };
 }
 
-// Runs IN the page. Heuristically maps inputs to known fields and fills them.
-// A skeleton: covers the common contact fields across most ATS forms; a full
-// per-ATS registry comes later.
+// Runs IN the page. Maps inputs/textareas/selects to known fields and fills them.
+// Deliberately SKIPS sensitive fields (work authorization, sponsorship, EEO,
+// salary) — those are left for the human, matching the review-gate principle.
 function fillFormInPage(values) {
   const RULES = [
     ["email", /e-?mail/i, (el) => el.type === "email"],
     ["phone", /phone|mobile|tel/i, (el) => el.type === "tel"],
-    ["firstName", /first.?name|given.?name/i],
-    ["lastName", /last.?name|surname|family.?name/i],
-    ["fullName", /full.?name|your.?name|^name$|legal.?name/i],
+    ["firstName", /first.?name|given.?name|fname/i],
+    ["lastName", /last.?name|surname|family.?name|lname/i],
+    ["fullName", /full.?name|your.?name|^name$|legal.?name|preferred.?name/i],
     ["linkedin", /linked.?in/i],
-    ["location", /city|location|address|town/i],
+    ["website", /website|portfolio|personal.?site|github|url/i],
+    ["currentTitle", /current.?title|job.?title|current.?role|present.?title/i],
+    ["currentCompany", /current.?company|current.?employer|present.?company/i],
+    ["school", /school|university|college|institution/i],
+    ["degree", /degree|qualification/i],
+    ["fieldOfStudy", /field.?of.?study|major|discipline/i],
+    ["city", /(^|[^a-z])city|town/i],
+    ["state", /state|province|region/i],
+    ["country", /country/i],
+    ["address", /street|address.?line|^address$/i],
   ];
+
+  // Never auto-answer these — leave them for the user to review.
+  const SENSITIVE = /authoriz|sponsor|visa|require.?spons|work.?permit|gender|sex\b|race|ethnic|hispanic|veteran|disab|salary|compensation|expected.?pay|date.?of.?birth|ssn|social.?security/i;
 
   function describe(el) {
     const bits = [el.name, el.id, el.placeholder, el.getAttribute("aria-label"), el.autocomplete];
     if (el.labels && el.labels[0]) bits.push(el.labels[0].textContent);
+    const wrap = el.closest("label, .field, .form-group, [class*='field']");
+    if (wrap) bits.push((wrap.textContent || "").slice(0, 120));
     return bits.filter(Boolean).join(" ").toLowerCase();
   }
 
-  function setValue(el, value) {
+  function setInput(el, value) {
     const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-    const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
-    setter.call(el, value);
+    Object.getOwnPropertyDescriptor(proto, "value").set.call(el, value);
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
+  function setSelect(el, value) {
+    const want = value.toLowerCase();
+    const opt = Array.from(el.options).find(
+      (o) => o.text.toLowerCase().includes(want) || o.value.toLowerCase() === want,
+    );
+    if (!opt) return false;
+    el.value = opt.value;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  }
+
   let filled = 0;
-  const fields = document.querySelectorAll("input, textarea");
+  let skipped = 0;
+  const fields = document.querySelectorAll("input, textarea, select");
   for (const el of fields) {
-    if (el.type === "hidden" || el.type === "password" || el.disabled || el.value) continue;
+    if (el.type === "hidden" || el.type === "password" || el.disabled) continue;
+    if (el.tagName !== "SELECT" && el.value) continue; // don't clobber what's there
     const desc = describe(el);
     if (!desc) continue;
+    if (SENSITIVE.test(desc)) {
+      skipped++;
+      continue;
+    }
     for (const [key, re, typeCheck] of RULES) {
       const value = values[key];
       if (!value) continue;
       if (re.test(desc) || (typeCheck && typeCheck(el))) {
-        setValue(el, value);
-        filled++;
+        const ok = el.tagName === "SELECT" ? setSelect(el, value) : (setInput(el, value), true);
+        if (ok) filled++;
         break;
       }
     }
   }
-  return filled;
+  return { filled, skipped };
 }
 
 async function autofill() {
@@ -266,8 +308,13 @@ async function autofill() {
       func: fillFormInPage,
       args: [autofillValues(profile)],
     });
-    const n = (res && res.result) || 0;
-    setStatus(n ? `Filled ${n} field${n > 1 ? "s" : ""}. Review before submitting.` : "No matching fields found on this page.", !n);
+    const { filled = 0, skipped = 0 } = (res && res.result) || {};
+    if (!filled && !skipped) {
+      setStatus("No matching fields found on this page.", true);
+      return;
+    }
+    const note = skipped ? ` Left ${skipped} sensitive field${skipped > 1 ? "s" : ""} for you.` : "";
+    setStatus(`Filled ${filled} field${filled === 1 ? "" : "s"}.${note} Review before submitting.`, false);
   } catch (err) {
     setStatus(err && err.message ? err.message : "Autofill failed.", true);
   }
