@@ -1,11 +1,14 @@
 "use client";
 
 import type {
+  AuthorCandidate,
+  AuthorDossier,
   Job,
   MatchResult,
   ParsedJob,
   Profile,
   ReferralQA,
+  ResearchTaste,
   TailoredResume,
 } from "./types";
 
@@ -46,6 +49,15 @@ export const api = {
 
   referralQA: (input: { profile: Profile; job: Job }) =>
     postJSON<{ qa: ReferralQA }>("/api/letters", { ...input, kind: "referralQA" }),
+
+  searchPeople: (input: { name: string; institution?: string }) =>
+    postJSON<{ candidates: AuthorCandidate[] }>("/api/people/search", input),
+
+  dossier: (input: { authorId: string; skipTaste?: boolean }) =>
+    postJSON<{ dossier: AuthorDossier; taste: ResearchTaste | null; tasteError?: string }>(
+      "/api/people/dossier",
+      input,
+    ),
 };
 
 /** Read a File as base64 (without the data: prefix). */

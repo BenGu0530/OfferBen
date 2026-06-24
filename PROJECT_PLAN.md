@@ -147,10 +147,18 @@ Supabase (optional).
 - [ ] Human-paced submission, prioritizing LinkedIn Easy Apply; external ATS uses
       "fill + 1-click confirm".
 
-### Phase 4 — Bonus (parked)
+### Phase 4 — Bonus
 - [ ] Interview prep: predicted behavioral/technical questions + STAR draft answers.
-- [ ] Research HR / tech leads: papers and research taste via clean official APIs
-      (OpenAlex, Semantic Scholar, arXiv, OpenReview, ORCID) — no scraping.
+- [x] **Research HR / tech leads** ("Research" view): name + institution → OpenAlex
+      author lookup (disambiguated by institution) → schools/labs/affiliations,
+      publications, and an LLM-inferred **research taste + outreach talking points**.
+      Clean official API, no scraping. Data fetch needs no AI/quota; only the taste
+      summary calls the model (degrades gracefully if unavailable).
+      - Deliberately NOT done: LinkedIn likes/comments/post interactions — no
+        compliant API; scraping violates ToS and risks bans. Taste is inferred
+        from real publications instead.
+      - Caveat: OpenAlex author disambiguation can be noisy (the `affiliations`
+        list especially); publications are the most reliable signal.
 
 ### Persistence / accounts (when needed)
 - [ ] Wire Supabase Auth + the existing RLS schema for cloud sync across devices.

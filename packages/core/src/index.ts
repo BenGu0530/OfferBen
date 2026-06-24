@@ -8,6 +8,16 @@ export * from "./ai/index";
 export { extractProfile, type ExtractProfileInput } from "./profile/extract";
 export { parseJob } from "./jd/parse";
 export { extractJobFromImage, type CapturedJob } from "./jd/vision";
+export {
+  searchAuthors,
+  getAuthorDossier,
+  synthesizeResearchTaste,
+  type AuthorCandidate,
+  type AuthorDossier,
+  type Affiliation,
+  type PublicationLite,
+  type ResearchTaste,
+} from "./people/research";
 export { scoreMatch, type ScoreMatchInput } from "./match/score";
 export { tailorResume, type TailorResumeInput } from "./tailor/resume";
 export {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ApplicationsView } from "@/components/ApplicationsView";
+import { PeopleView } from "@/components/PeopleView";
 import { BackupControls } from "@/components/BackupControls";
 import { GenerateStep } from "@/components/GenerateStep";
 import { JobStep } from "@/components/JobStep";
@@ -23,7 +24,7 @@ const EMPTY_JOB: Job = { title: "", company: "", description: "" };
 
 export default function HomePage() {
   const [step, setStep] = useState(0);
-  const [view, setView] = useState<"wizard" | "tracker">("wizard");
+  const [view, setView] = useState<"wizard" | "tracker" | "people">("wizard");
   const [profile, setProfileState] = useState<Profile | null>(null);
   const [job, setJobState] = useState<Job>(EMPTY_JOB);
   const [parsed, setParsed] = useState<ParsedJob | null>(null);
@@ -87,13 +88,32 @@ export default function HomePage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="btn-ghost px-2.5 py-1 text-xs"
-              onClick={() => setView((v) => (v === "tracker" ? "wizard" : "tracker"))}
-            >
-              {view === "tracker" ? "← Back to wizard" : `Applications (${applications.length})`}
-            </button>
+            {view === "wizard" ? (
+              <>
+                <button
+                  type="button"
+                  className="btn-ghost px-2.5 py-1 text-xs"
+                  onClick={() => setView("people")}
+                >
+                  Research
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost px-2.5 py-1 text-xs"
+                  onClick={() => setView("tracker")}
+                >
+                  Applications ({applications.length})
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="btn-ghost px-2.5 py-1 text-xs"
+                onClick={() => setView("wizard")}
+              >
+                ← Back to wizard
+              </button>
+            )}
             <BackupControls
               onImported={({ profile: p, job: j }) => {
                 if (p) setProfileState(p);
@@ -113,6 +133,8 @@ export default function HomePage() {
 
       {view === "tracker" ? (
         <ApplicationsView applications={applications} onChange={setApplications} />
+      ) : view === "people" ? (
+        <PeopleView />
       ) : (
       <>
       <div className="mb-6">

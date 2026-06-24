@@ -18,6 +18,11 @@ export type {
   AppData,
   ApplicationRecord,
   ApplicationStatus,
+  AuthorCandidate,
+  AuthorDossier,
+  Affiliation,
+  PublicationLite,
+  ResearchTaste,
 } from "@offerben/core";
 
 // Local copy of the status list (a runtime value). Defined here rather than
