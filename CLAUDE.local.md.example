@@ -1,0 +1,26 @@
+# CLAUDE.local.md — personal notes (TEMPLATE)
+
+Copy this file to `CLAUDE.local.md` (which is git-ignored) and fill it in. This
+is YOUR private layer — personal keys, your own test accounts, scratch notes,
+and any working style you want your own agent to follow. It is never committed,
+so it won't collide with the other contributor's preferences.
+
+Shared context (architecture, conventions, invariants) goes in `CLAUDE.md`.
+Project status / decisions go in `PROJECT_PLAN.md`. Both are committed.
+
+---
+
+## My setup
+
+- AI provider I use locally: <!-- e.g. gemini (GEMINI_API_KEY) / groq / ollama -->
+- My Gemini/AI key lives in: `apps/web/.env.local` (git-ignored — never commit it)
+- Google OAuth: my account is added as a Test user on the consent screen;
+  my extension id's redirect URI (`https://<id>.chromiumapp.org/`) is registered.
+
+## My preferences for the agent (personal)
+
+<!-- e.g. "explain in Chinese", "prefer minimal diffs", "ask before big refactors" -->
+
+## Scratchpad
+
+<!-- whatever you're mid-thought on; not for shared decisions (those go in PROJECT_PLAN.md) -->

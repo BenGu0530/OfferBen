@@ -28,3 +28,7 @@ npm-debug.log*
 coverage/
 .vscode/
 .idea/
+
+# AI assistant — personal/local only (shared context goes in CLAUDE.md)
+CLAUDE.local.md
+.claude/settings.local.json
