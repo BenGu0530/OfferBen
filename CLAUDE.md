@@ -8,8 +8,8 @@
 
 ## What this is
 
-OfferBen — an AI job-application copilot (inspired by Offer Max). One structured
-profile → a tailored resume, cover letter, recruiter email, referral content, a
+OfferBen — an AI job-application copilot. One structured profile → a 
+tailored resume, cover letter, recruiter email, referral content, a
 match score, an application tracker, and "research a person" (a hiring manager /
 referrer's schools, labs, papers, research taste). A Chrome **side-panel
 extension** docks next to a live job page, auto-reads it, and scores it.
@@ -104,5 +104,9 @@ no AI), `people/dossier` (OpenAlex + AI taste). All wrapped by `lib/server.ts`
 - TypeScript everywhere in web/core; the extension is intentionally plain JS
   (no bundler) — keep injected scripts self-contained.
 - Match the surrounding code's style; comments explain *why*, not *what*.
-- Commit `apps/extension/.claude` / root `.claude/` if we add shared agent config;
-  keep `settings.local.json` and `CLAUDE.local.md` personal (git-ignored).
+- Shared agent config lives in `.claude/` (committed): `settings.json` wires two
+  hooks — auto-Prettier on edited files (`hooks/format.sh`) and a Bash guard that
+  blocks force-push / `rm -rf` on dangerous paths (`hooks/guard-bash.sh`). Keep
+  `settings.local.json` and `CLAUDE.local.md` personal (git-ignored).
+- Work is tracked in GitHub Issues (labels P1/P2/P3 + area); `docs/ISSUES.md` is
+  the seed list.

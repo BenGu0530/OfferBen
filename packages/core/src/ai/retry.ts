@@ -37,7 +37,9 @@ export async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> 
     throw new Error("The AI model is busy or out of quota right now. Try again in a moment.");
   }
   if (/not valid JSON|empty response/i.test(s)) {
-    throw new Error("The AI couldn't produce a clean result for this page. Try again, or use a cleaner job posting.");
+    throw new Error(
+      "The AI couldn't produce a clean result for this page. Try again, or use a cleaner job posting.",
+    );
   }
   throw lastErr;
 }
