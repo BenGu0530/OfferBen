@@ -1,269 +1,218 @@
-# OfferBen — Project Plan & Roadmap
+# OfferBen — 项目计划与路线图
 
-> An AI job-application copilot inspired by *Offer Max*. One structured profile →
-> a tailored resume, cover letter, recruiter email, and referral content for any job.
+> 活跃层:做了什么、下一步、为什么。架构与铁律见 [CLAUDE.md](CLAUDE.md);个人笔记/密钥放 `CLAUDE.local.md`(git 忽略)。
+> 每完成一块就更新这里并提交,让协作者的 agent 保持同步。
 >
-> Last updated: 2026-06-22
+> 最后更新:2026-06-30
 
 ---
 
-## 1. Vision
+## 1. 一句话
 
-Build the full Offer Max feature set in phases, starting with the lowest-risk,
-highest-value piece (AI resume generation) and growing toward a browser extension
-and a semi-automatic "apply while you have breakfast" queue.
+一份结构化档案 → 任意职位的定制简历 / 求职信 / 招聘官邮件 / 内推文案 + 匹配评分 +
+申请追踪 + "研究一个人"(招聘官 / 内推人的院校、实验室、论文、研究品味)。一个 Chrome
+**侧栏扩展**贴在职位页旁,自动读取并评分。**数据归用户自己**(本地优先,或同步到本人
+Google Drive)。不爬取、不自动提交。
 
-Guiding principles:
-
-- **Solo-use now, product-ready later.** Code is modular and multi-tenant-safe so
-  it can be open-sourced or commercialized without a rewrite.
-- **Quality + safety over reckless automation.** Submission uses a human review
-  gate to avoid account bans and wasted application slots.
-- **Keep secrets server-side.** The Gemini key never reaches the browser/extension.
+**定位(2026-06-30 定)**:泛用途求职为主(对标 OfferMax 基线),在其上叠加**学术/科研向
+差异化层**(research taste、按论文找人)。商业上走开源 + 真 BYOK,边际成本归零。
 
 ---
 
-## 2. Status at a glance
+## 2. 状态总览
 
-| Phase | Scope | Status |
-|-------|-------|--------|
-| Phase 0 | Monorepo foundation, core package, DB schema | ✅ Done |
-| Phase 1 | MVP web app: build profile → score → generate → export PDF | ✅ Done |
-| Phase 2 | Browser extension: JD capture + autofill | 🟡 Started (capture done, autofill pending) |
-| Phase 3 | Semi-auto apply queue with review gate | ⬜ Planned |
-| Phase 4 | Interview prep + research on HR / tech leads | ⬜ Parked |
+| 阶段 | 范围 | 状态 |
+|------|------|------|
+| Phase 0 | 单仓基座、core 包、DB schema | ✅ 完成 |
+| Phase 1 | MVP 网页:建档案 → 评分 → 生成 → 导出 PDF | ✅ 完成 |
+| Phase 2 | 浏览器扩展:JD 捕获 + 评分 + autofill | 🟡 进行中(捕获/评分/视觉/autofill v2 已做) |
+| Phase 3 | 半自动申请队列(人工闸门) | ⬜ 规划中 |
+| Phase 4 | 面试准备 + 研究 HR/技术 leader | 🟡 研究一个人已做;面试准备待做 |
 
-Legend: ✅ done · 🟡 in progress · ⬜ planned/not started
+图例:✅ 完成 · 🟡 进行中 · ⬜ 未开始
 
 ---
 
-## 3. Architecture
+## 3. 架构
 
 ```
-offerben/
-  apps/
-    web/            Next.js 14 app (4-step wizard + server API routes)
-    extension/      MV3 browser extension (plain JS, no build) — Phase 2
-  packages/
-    core/           Shared logic: schemas, AI provider abstraction, prompts,
-                    JD parsing, match scoring, tailoring, letters
-    db/             Supabase client + schema.sql (Postgres + RLS) — optional
+apps/
+  web/         Next.js 14(向导 + 申请追踪 + 研究视图)+ 服务端 API(AI 密钥只在这)
+  extension/   MV3 Chrome 侧栏扩展(纯 JS,无构建)
+packages/
+  core/        全部业务逻辑:schema(Zod)、AI 抽象、prompt、JD 解析、匹配评分、
+               定制、信件、视觉捕获、人物研究、存储后端
+  db/          Supabase 客户端 + schema.sql(RLS)。可选,未接
 ```
 
-All business logic lives in `packages/core`; the web app and extension are thin
-shells so logic is reused, not duplicated.
-
-Tech: npm workspaces + Turborepo · Next.js 14 / React 18 / Tailwind · Zod ·
-Google Gemini (default `gemini-2.5-flash`, swappable) · `@react-pdf/renderer` ·
-Supabase (optional).
-
-> Note: the original plan specified pnpm; this environment couldn't install pnpm
-> without root, so the repo uses **npm workspaces**. Turborepo config is retained.
+**铁律**:逻辑都在 `packages/core`,`apps/*` 是薄壳。技术栈:npm workspaces + Turborepo ·
+Next.js 14 / React 18 / Tailwind · Zod · 默认 Gemini(可换 provider)· `@react-pdf/renderer`。
 
 ---
 
-## 4. Done ✅
+## 4. 已完成 ✅
 
-### Phase 0 — Foundation
-- [x] npm workspaces + Turborepo monorepo (`apps/*`, `packages/*`).
-- [x] Shared TypeScript base config, `.gitignore`, `.env.example`, README.
-- [x] `packages/core`: profile/job/match/generation schemas (Zod, JSON-Resume based).
-- [x] Swappable `AIProvider` abstraction + Gemini implementation + factory.
-- [x] `packages/db`: Supabase public/service clients + `schema.sql` with Row Level
-      Security on every table (multi-tenant safe from day one).
-- [x] Secret management: `GEMINI_API_KEY` read server-side only; `.env.local`
-      git-ignored.
+**网页(Phase 1 + 后续)**
+- 建档案(上传简历 PDF / LinkedIn 导出 / 粘贴文本 → AI 抽取结构化、可编辑档案)
+- 贴 JD → 匹配评分(0–100 + 命中/缺失关键词 + 强项/缺口/建议,带评分环)
+- 生成:定制简历(诚实改写 + 重排)、求职信、招聘官邮件、内推文案、内推 Q&A
+- ATS 友好 PDF 导出(单栏、标准字体)
+- 4 步向导 + 本地持久化 + Export/Import 备份(JSON)
+- Google Drive 同步(opt-in,最小权限 `drive.file`,网页 + 扩展共用)
+- 申请追踪(分数/状态/历史:saved→applied→面试→拒/offer;生成物存为 Drive Markdown)
+- **研究一个人接入生成**(#5):人物研究结果喂进定制/信件
 
-### Phase 1 — MVP web app
-- [x] Profile import: upload resume PDF / LinkedIn export / paste text → LLM
-      extraction into a structured profile.
-- [x] Job input: paste JD (title/company/URL/description).
-- [x] Match analysis: JD parsing + 0–100 score + matched/missing keywords +
-      strengths/gaps/suggestions, shown with a score ring.
-- [x] Generation: tailored resume (truthful rewrite + reorder), cover letter,
-      recruiter email, referral note, referral Q&A.
-- [x] ATS-safe PDF export (single-column, standard fonts) via `@react-pdf/renderer`.
-- [x] 4-step wizard UI (Profile → Job → Match → Generate) with local persistence.
-- [x] Verified: production build passes, API routes return clean errors without a key.
+**扩展(Phase 2,部分)**
+- MV3 + 侧栏 UI:贴在职位页旁,自动读 JD、按 URL 缓存评分(重访 0 调用)
+- JD 抽取适配:Greenhouse / Lever / Ashby / Workday + 通用兜底
+- 截图 + 视觉兜底(DOM 读不到时 captureVisibleTab → 视觉模型,门控到显式开/刷新)
+- autofill v2:填联系/website/公司/职位/学校/学位/城市等,**刻意跳过敏感字段**
+  (工签/sponsor/EEO/race/veteran/salary),并报告留给人工的字段数
+- **LinkedIn 一键导入**(#20):读用户自己登录页 → 走 extract 抽取
+- 扩展 → 网页 handoff(短 token,密钥留服务端)
 
-### Cross-cutting (added after MVP)
-- [x] Export/Import backup: download profile+job as JSON, restore on another
-      machine (no cloud needed).
-- [x] Extension → web handoff: web app reads a `?job=` URL param to pre-fill a
-      captured job.
-- [x] Provider-agnostic storage layer (`packages/core/src/storage`): `ProfileStore`
-      interface + `GoogleDriveStore` (least-privilege `drive.file` scope).
-- [x] Google Drive sync in the web app (opt-in): each user syncs their profile to
-      **their own** Drive via Google Identity Services. Local stays the default;
-      Drive buttons appear only when `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is set.
-- [x] Application tracker: save scored jobs (score/verdict/status/date), edit
-      status (saved→applied→interviewing→rejected→offer), syncs in AppData to Drive.
-- [x] Generated docs → Drive files: "Save to Drive" in the Generate step writes a
-      readable Markdown application doc to `My Drive/OfferBen/applications/`
-      (app-created, so it round-trips under `drive.file`); the tracker links to it
-      ("📄 Drive"). Chosen over inlining in one JSON so each application is a file
-      the user can browse/open/share — lower-barrier + open-source friendly.
-- [x] Editable profile: fix name/headline/email/phone/skills after AI extraction.
-- [x] **BYOK + AI settings** (#3, #21): a Settings view lets each user bring their
-      own provider/key/model (Gemini or any OpenAI-compatible). Key stays in the
-      browser, sent per-request via `x-offerben-*` headers, used once, never
-      persisted server-side; falls back to the env key for self-hosters. The header
-      chip shows the active backend ("Server key" / "BYOK · <model>"). This makes
-      "true BYOK / local-first" an architectural fact, not marketing.
-
-### Phase 2 — Extension (partial)
-- [x] MV3 manifest + popup UI (capture, edit, send).
-- [x] JD extraction adapters: Greenhouse, Lever, Ashby, Workday + generic fallback.
-- [x] "Open in OfferBen" handoff (key stays server-side).
-- [x] **One-click LinkedIn self-import** (#20): on the user's own
-      `linkedin.com/in/...` page, the panel reads the visible profile text and runs
-      it through `/api/profile/extract` → saves it as the extension's profile
-      (used by scoring + autofill). Compliant: user-initiated, single page, their
-      own profile — no scraping/automation.
-- [x] **Side Panel UI** (v0.2): docks next to the live job page, reads it, and
-      scores it. Chrome/Edge 114+. Reuses the `extract.js` adapters; popup legacy.
-      - **Scoring is manual by default** ("⚡ Score this job" button) — an
-        "Auto-score as I browse" toggle (Settings) opts into per-page AI. Avoids
-        spending quota / firing on every page (incl. non-job pages).
-      - Extension→web handoff uses a short token via `/api/handoff` (POST→id,
-        open `/?h=id`); the old base64-JD-in-URL overflowed headers (HTTP 431).
+**协作底座**:CLAUDE.md / 本计划 / 个人层 + `.claude` hooks(自动格式化 + 危险命令拦截)+
+Vitest 测试框架(覆盖 core 纯逻辑)
 
 ---
 
-## 5. In progress / Next up 🟡
+## 5. 竞品分析(2026-06-30)
 
-### Phase 2 — finish the extension
-- [x] **Inline match score in the side panel** — reads the JD and scores it
-      against the synced profile in-panel; caches per URL (revisits cost 0 calls).
-- [x] **Profile in the panel via Google Drive** — panel reads the profile from the
-      user's Drive (`offerben-data.json`) via chrome.identity; cached locally.
-- [x] **Screenshot + vision fallback** — when DOM read fails, `captureVisibleTab`
-      → `/api/capture` → vision model (`extractJobFromImage`). Gated to explicit
-      open/⟳ so silent navigations don't burn quota. A robustness fallback, *not*
-      a scraping shortcut (user-initiated, single-page).
-- [x] **Autofill application forms** (#6, #18): fills contact + website + current
-      company/title + school/degree/field + city/state/country across inputs,
-      textareas, `<select>`s, and radio groups. Richer detection
-      (`data-automation-id` etc.) for Workday/Ashby. Sensitive fields (work auth /
-      sponsorship / EEO) are answered ONLY from the user's opt-in stored answers
-      (Settings); demographics never guessed; salary/DOB/SSN always skipped.
-- [x] **Inline generation in the side panel** (#7): write a cover letter /
-      recruiter email / referral note in-panel after scoring, no app round-trip.
-- [ ] Extract this into a `packages/ats-adapters` package shared by capture + autofill.
-- [ ] Inline match score badge on the job page (no need to open the app).
-- [ ] One-click read of the user's own LinkedIn profile (in their logged-in browser).
-- [ ] Migrate extension to WXT + React + TypeScript so it can import
-      `@offerben/core` directly (needs a bundler step) — also lets the extension
-      reuse `GoogleDriveStore` for its own Drive sync.
-- [ ] Extension icons + store-ready packaging.
+### 统一对比表
 
----
+按性质分两档:**镜像同行**(OfferMax,和我们同阶段)vs **赛道巨头**(Simplify/Jobright/Breeze)。
 
-## 6. Planned ⬜
+| 维度 | **OfferBen(我们)** | **OfferMax** | Simplify | Jobright | Breeze |
+|---|---|---|---|---|---|
+| 性质/体量 | 上线前,开源 | 个人,≈半月,465 用户/9 评分 | 50w–100w | 200w 平台/20w 扩展 | ~288,极早期 |
+| 核心定位 | JD→申请包 + 侧栏评分,学术向 | JD→申请包(通用) | 填表 + 职位库 | AI 求职 agent | 批量自动投递 |
+| 简历/信/邮件/内推 | ✅ 全(网页端) | 🟡(信✓,邮件/内推未明) | ✅(付费) | ✅(可能编造) | ❌ 无信 |
+| 页内匹配评分 | ✅ 按 URL 缓存 | ✅ | ✅ | ✅ | ❌ |
+| 自动填表 | 🟡 v2,跳敏感字段 | ✅ 含 EEO | ✅ 100+ATS | ✅ 90%ATS+答筛选题 | ✅ |
+| 支持 ATS 数 | 4 + 通用兜底 | 16 | 100+ | ~90% | LinkedIn/Indeed+20 |
+| 自动提交 | ❌ 人工闸门(刻意) | ❌ | ❌ | 🟡 Agent(候补) | ✅ 全自动 |
+| 职位发现 | ❌ | ❌ | ✅ 5w 职业页 | ✅ 800w/天 40w | ❌ |
+| 内推/内线人脉 | ❌ | ❌ | 🟡 | ✅ 校友+招聘官(王牌) | ❌ |
+| **研究一个人(真人)** | ✅✅ OpenAlex:院校/实验室/论文/research taste | ❌(仅公司) | ❌ | ❌ | ❌ |
+| 面试准备 | ❌(P4) | ✅ JD-grounded STAR | ❌ | ✅ Orion | ❌ |
+| **数据归属** | ✅✅ 本地优先/本人 Drive,服务器不存 PII | 🟡 需注册账号,存其服务器 | ❌ 云账号 | ❌ 云(有垃圾邮件投诉) | ❌ 云 |
+| 开源 | ✅ | ❌ | ❌ | ❌ | ❌ |
+| BYOK/换模型/自部署 | ✅ | ❌ 锁 Gemini | ❌ | ❌ | ❌ |
+| 定价 | 免费(自带 key) | 免费账号 + 内购 | 免费/≈$40 月 | 免费/$39.99 月 | freemium |
 
-### Phase 3 — Semi-auto apply queue ("breakfast mode")
-- [ ] Job discovery / enqueue (search boards or batch-capture).
-- [ ] Batch tailor resumes for all queued jobs.
-- [ ] Autofill each application.
-- [ ] **Review gate**: auto-fill everything, pause for a one-glance human approval,
-      then submit in batch (protects against bans and wasted application slots).
-- [ ] Human-paced submission, prioritizing LinkedIn Easy Apply; external ATS uses
-      "fill + 1-click confirm".
+### 关键结论
 
-### Phase 4 — Bonus
-- [x] Interview prep (#15): predicted behavioral/technical questions + STAR draft
-      answers grounded in the profile; a card in the Generate step.
-- [x] **Research HR / tech leads** ("Research" view): name + institution → OpenAlex
-      author lookup (disambiguated by institution) → schools/labs/affiliations,
-      publications, and an LLM-inferred **research taste + outreach talking points**.
-      Clean official API, no scraping. Data fetch needs no AI/quota; only the taste
-      summary calls the model (degrades gracefully if unavailable).
-      - Deliberately NOT done: LinkedIn likes/comments/post interactions — no
-        compliant API; scraping violates ToS and risks bans. Taste is inferred
-        from real publications instead.
-      - Caveat: OpenAlex author disambiguation can be noisy (the `affiliations`
-        list especially); publications are the most reliable signal.
-- [x] **Research → outreach** (#5): from a researched person's dossier + taste,
-      generate a short, specific outreach message (research-interest opener or
-      referral ask) grounded in one of their real papers + the user's background.
-      The compliant, academic-leaning differentiator; foundation for #17.
-
-### Persistence / accounts (when needed)
-- [ ] Wire Supabase Auth + the existing RLS schema for cloud sync across devices.
-- [ ] Real generation **history** (currently not persisted between sessions).
+1. **OfferMax = 同体量镜像对手**(个人开发者、≈半月、465 用户、Gemini + "privacy-first"、
+   功能几乎重叠)。**无技术壁垒,不是追赶问题,是定位问题。** 它领先的只是已上架 + 多做了
+   面试准备/16 ATS —— 时间问题,可抄齐。真巨头是 Simplify / Jobright。
+2. **我们唯二无人竞争、靠定位而非技术的护城河**:
+   - **research taste / 研究一个人(真人,OpenAlex)** —— 全场唯一,巨头都不做。
+   - **真开源 + 真本地 + BYOK** —— OfferMax 的 "privacy-first" 是营销词(要注册、存它服务器),
+     我们是架构事实。
+3. **Jobright 的校友/招聘官 finder 是数据护城河**(公司员工/校友关系图谱),不是算法。泛用途
+   我们没数据复制不了;**学术圈我们能做出合规版**(按论文/实验室找人)。
+4. **大盘背景:AI 求职军备竞赛("doom loop")** —— LinkedIn 每分钟约 1.1w 投递、每岗位 240+ 份,
+   招聘方在退回线下面试、上反 AI/反作弊工具。Breeze 式全自动投递正是引爆点。我们的**人工闸门 +
+   诚实不刷量**可当卖点。
 
 ---
 
-## 7. Known gaps / missing vs Offer Max
+## 6. 定位与战略决策(2026-06-30)
 
-| Capability | Offer Max | OfferBen now | Plan |
-|---|---|---|---|
-| Upload resume / paste text | ✅ | ✅ | — |
-| One-click read LinkedIn profile | ✅ (extension) | ✅ (extension self-import) | — |
-| JD capture from career pages | ✅ | 🟡 (extension built, not yet load-tested by user) | Phase 2 |
-| Match scoring | ✅ | ✅ | — |
-| Tailored resume + letters | ✅ | ✅ | — |
-| Autofill application forms | ✅ | ❌ | Phase 2 |
-| Interview question prep | ✅ | ❌ | Phase 4 |
-| Cloud sync / multi-device | ✅ (Supabase) | 🟡 (Google Drive sync in web app; needs OAuth client id) | Drive now · Supabase later |
-| Saved application history | ✅ | ❌ | Phase 3 / persistence |
+### 6.1 定位
+- **泛用途为主**:先抄 OfferMax 基线(ATS 对齐、面试准备、扩展内联生成),保 TAM。
+- **学术/科研向 = 差异化层,不是唯一定位**:research taste、按论文找人,服务博士申请 /
+  research engineer 等人群,做出别人没有的东西。
 
-### Other current limitations
-- Storage is browser `localStorage` only; clearing the browser loses data
-  (mitigated by Export/Import).
-- Vitest unit tests cover pure core logic (`packages/core/test/`): JSON
-  extraction, retry/transient classification, object utils, schema tolerance,
-  abstract reconstruction. Run with `npm test`. (UI / API routes not yet covered.)
-- No authentication (single-user assumption).
-- Extension is plain JS and does not yet share `@offerben/core` code.
-- Free Gemini tier rate limits apply; fine for personal use, not for bulk.
+### 6.2 商业模式
+- **真 BYOK**:用户的 key 存在客户端,直接打模型 → 我们**连中转后端都可砍**,真零成本、真隐私。
+  (这与现状"key 只在服务端"有张力,是后续架构要拍的事 —— 见 #13。)
+- **收费**:开源后走 **BYOK + 一次性 / 一年使用权软件费**(参考 OfferMax $19.99 一次性)。
+  绕开"用户怕订阅取消" + "我们怕维护"两个问题。
+- **成本**:纯本地 + BYOK + 自部署下边际成本 ≈ 0(仅域名)。
+
+### 6.3 churn 对冲
+申请者端结构性 churn(找到工作就走,所有对手都有)。三招对冲:
+1. **边际成本归零** → churn 也不亏钱;开源先求口碑/star/社区,不求月费。
+2. **学术向天然低 churn**:申请周期长、学术圈十年关系网;research taste 可延伸到找
+   advisor/合作者/审稿人 → 从求职工具变学术关系工具。
+3. **网络效应功能留人**:内推社区、职位 feed。
+
+### 6.4 同源引擎,两端复用(核心架构观点)
+`packages/core`(extract + match/score + people/research)天然可反转:
+- **申请者端**:1 JD × 1 档案 打分。
+- **招聘端**:N 简历 × 1 JD 打分。
+- 同一引擎,复用不重写,衍生两个同源产品:
+  1. **AI 筛选器模拟器(申请者端,近期可做)**:LLM 扮演 HR 筛选 AI,给简历对 JD 打分排序 +
+     "为什么过/被刷",闭环优化。两层:① ATS 结构解析(已基本具备);② LLM 语义筛选。
+     ⚠️ 守住诚实不刷量 —— 让真实证据被 AI 读懂,不编造/不堆关键词。
+  2. **HR 端候选人排序器 / 智能收件箱(探索,P3)**:面向没有 ATS、用 Excel+邮箱的小公司/
+     累的招聘人。解析一堆申请 → 对 JD 排序 → 强项/缺口/为什么 → 标"疑似 AI 模板" →
+     top 候选人接 research-a-person 富集。本地优先,候选人 PII 不出本机。
+     ❌ 不做"AI 检测 AI"(弱、不准);招聘方真正的痛是"捞真信号 + 核实匹配"。
+- **战略意义**:引擎做一次,模拟器卖求职者、排序器卖招聘方;我们同时懂两端,具备
+  "验证一次、把可信信号卖给招聘方"的桥接基础。
+- **风险/顺序**:HR 端是 B2B(GTM 与周期不同)、他人候选人数据法律分量重(EEO/偏见/数据保护);
+  先做申请者端模拟器(也是 HR 工具的迷你验证),HR 端待基线稳后再探索。
 
 ---
 
-## 8. How to run
+## 7. 路线图 / Issues
 
-```bash
-npm install
-cp .env.example apps/web/.env.local   # then set GEMINI_API_KEY
-npm run dev                            # http://localhost:3000
-```
+### 进行中(有决定/方向)
+- **#21** 定位 + BYOK + churn + 同源引擎双端战略(本节的源讨论)
+- **#18** 自动填表:全字段覆盖 + 竞品字段对照 + EEO 策略(对标 ~16 ATS,边缘 ATS 可不填;
+  敏感字段 = 用户预存答案 + 可关,不瞎猜)
+- **#17** 内推/校友发现(学术路径优先;Google X-ray 与社区 later;❌ 不接管鼠标自动化)
+- **#15** 面试准备(对标 OfferMax + 接 research-a-person 做学术版)
+- **#22** 简历裁剪:恢复删掉的条目 + 拖拽重排
 
-Extension: `chrome://extensions` → Developer mode → Load unpacked → `apps/extension`.
+### 待做
+- **#19** 职位发现(合规 API,不爬虫)
+- **#7** 扩展侧栏内联生成
+- **#6** 自动填表 per-ATS 注册表
+- **#12** 人物研究加 Semantic Scholar / arXiv + 消歧
+- **#11** 从 Drive 导入现有简历 PDF(Google Picker)
+- **#10** 发布就绪:host 权限 + 图标 + 打包
+- **#9** 扩展迁移到 WXT + TS
+- **#8** 共享 `.claude` 格式化/lint hook
+- **#13** 发布版扩展的托管 API(注:真 BYOK 方向下需重新考量)
+- **#14** Supabase 认证 + 云同步
+
+### 待探索(本计划新增,未必都开 issue)
+- **AI 筛选器模拟器**(申请者端,见 6.4)
+- **HR 端候选人排序器**(见 6.4)
+
+### Brainstorm
+- **#23** 改名(脱离 OfferMax 相似;候选见 issue)
+- **#24** 冷启动/分发(暂不急;短视频/GitHub/学校社区)
 
 ---
 
-## 9. Decision log
+## 8. 几个要记住的坑
 
-- **pnpm → npm workspaces**: sandbox couldn't install pnpm without root.
-- **Storage: localStorage first**: zero-backend to validate AI quality; Supabase
-  schema is ready for later.
-- **LinkedIn import via file/paste (not scraping)**: compliant; one-time setup is
-  outside the apply loop so it doesn't hurt efficiency. Extension "read your own
-  profile" is a Phase 2 enhancement in the user's own browser.
-- **Submission via review gate (not full auto)**: higher quality, avoids bans and
-  wasted single-shot applications.
-- **Key stays server-side**: extension hands off via URL; never holds the key.
-- **Provider-agnostic AI, env-driven**: one `OpenAICompatibleProvider` covers
-  OpenAI/Groq/OpenRouter/DeepSeek/Ollama/self-hosted fine-tunes; `AI_PROVIDER`
-  selects the backend. Swapping models is config, not code — so we're not locked
-  to Gemini (whose free tier is only 20 req/day/model).
-- **Match = 1 AI call**: dropped the separate parseJob; keyword data is derived
-  from the match result. Extension caches scores per URL (revisits cost 0 calls)
-  to stretch the free tier.
-- **Resume curation (not just rewrite)**: the tailor step now SELECTS the work/
-  projects worth showing for a role, DROPS the rest (with reasons), orders
-  most-relevant-first, and targets 1 or 2 pages — then the user can remove/reorder
-  items client-side (no extra AI call) before exporting. This is the core
-  differentiator: a dump-everything resume needs no tool. Verified it drops an
-  unrelated project (e.g. a bakery website) for a robotics role.
-- **Model fallback for reliability**: `GeminiProvider` tries a chain of models
-  (primary → `gemini-2.0-flash-lite` → `gemini-2.5-flash` → `gemini-2.0-flash`).
-  Free-tier models get deprioritized during demand spikes (503 UNAVAILABLE);
-  each model is a separate capacity pool, so falling over makes calls succeed
-  instead of dying after a few retries. Validated end-to-end (2026-06-24):
-  match, tailor, letters, people dossier+taste, and vision capture all work.
-- **Cloud sync = user's own Google Drive (not our server)**: chose "bring your own
-  storage" so the published app never holds anyone's resume PII, needs no backend,
-  and works for everyone for free. Uses the least-privilege `drive.file` scope
-  (app sees only its own file) to stay out of Google's costly `restricted`-scope
-  CASA security review. Local mode remains the default; Drive is opt-in.
+- **免费配额很小**:Gemini 免费层约每天每模型 20 次(太平洋午夜重置)。全 429 = 限流,
+  换模型或换 provider。视觉兜底耗一次调用,故门控到显式开/刷新。
+- **铁律(详见 CLAUDE.md)**:密钥只在服务端;client 只 import 类型;Drive 只用 `drive.file`;
+  不爬取;投递有人工闸门(刻意跳敏感字段)。
+- **提交前**跑 `npm run typecheck` 和 `npm test`。加纯函数就加测试。
+- **协作**:#5、#20 已由协作者关闭;开工前 `git pull` + 看 issue 状态,别撞车。
+
+---
+
+## 9. 决策日志
+
+- **pnpm → npm workspaces**:沙箱无 root 装不了 pnpm。
+- **存储 localStorage 优先**:零后端先验证 AI 质量;Supabase schema 备着。
+- **LinkedIn 经文件/粘贴 + 自己登录页读取(不爬取)**:合规;一次性设置在 apply 循环外。
+- **投递走人工闸门(非全自动)**:质量更高,避免封号和浪费单次申请机会;也对冲 doom loop。
+- **密钥服务端**:扩展经 handoff,从不持 key。(真 BYOK 方向可能让 key 进客户端,待拍。)
+- **provider-agnostic,env 驱动**:一个 `OpenAICompatibleProvider` 覆盖
+  OpenAI/Groq/OpenRouter/DeepSeek/Ollama;换模型是配置不是代码,不锁 Gemini。
+- **Match = 1 次 AI 调用**:去掉单独 parseJob,关键词从 match 结果派生;扩展按 URL 缓存省配额。
+- **模型降级回退**:GeminiProvider 主→备模型链,503 时回退(各模型独立配额池)。
+- **云同步 = 用户自己的 Google Drive(非我们服务器)**:发布版永不持有他人简历 PII,无后端,
+  全员免费;用最小权限 `drive.file` 避开 Google 的 `restricted` scope 安全审查。本地仍是默认。
+- **定位/商业(2026-06-30)**:泛用途为主 + 学术差异化层;真 BYOK + 一次性/年费;边际成本归零;
+  同源引擎可反转做 HR 端(见第 6 节)。
+- **改名(2026-06-30)**:OfferBen 与 OfferMax 太像,计划改名(#23)。

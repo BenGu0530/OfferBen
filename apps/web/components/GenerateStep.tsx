@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import { api } from "@/lib/client";
 import { driveEnabled, saveApplicationToDrive } from "@/lib/drive";
+import { profileToLatex } from "@/lib/latex";
 import { storage } from "@/lib/storage";
 import type {
   ApplicationRecord,
@@ -80,6 +81,48 @@ const LETTER_CARDS: { key: LetterKey; title: string; desc: string }[] = [
 
 function sanitize(s: string): string {
   return (s || "").replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") || "resume";
+}
+
+function downloadText(text: string, filename: string, type: string): void {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Open the LaTeX in a fresh Overleaf project (form POST, no infra). */
+function openInOverleaf(tex: string): void {
+  const form = document.createElement("form");
+  form.action = "https://www.overleaf.com/docs";
+  form.method = "POST";
+  form.target = "_blank";
+  const input = document.createElement("input");
+  input.type = "hidden";
+  input.name = "snip";
+  input.value = tex;
+  form.appendChild(input);
+  document.body.appendChild(form);
+  form.submit();
+  form.remove();
+}
+
+/** Rough rendered-length estimate (lines → pages) so the user can trim to fit. */
+function estimatePages(p: Profile): number {
+  let lines = 6; // header
+  if (p.basics.summary) lines += 1 + Math.ceil(p.basics.summary.length / 95);
+  for (const w of p.work) lines += 2 + w.highlights.length;
+  for (const pr of p.projects) lines += 2 + pr.highlights.length;
+  lines += p.education.length;
+  const skills = p.skills.flatMap((s) => (s.keywords.length ? s.keywords : s.name ? [s.name] : []));
+  if (skills.length) lines += 2;
+  if (p.publications.length) lines += 1 + p.publications.length;
+  if (p.awards.length) lines += 1 + p.awards.length;
+  return lines / 50; // ~50 lines per page
 }
 
 export function GenerateStep({
@@ -251,14 +294,25 @@ export function GenerateStep({
   function reorderProject(from: number, to: number) {
     setCurated((c) => (c ? { ...c, projects: reorder(c.projects, from, to) } : c));
   }
-  // Re-add an AI-dropped item, using its ORIGINAL (un-curated) content.
+  // Re-add an AI-dropped item, using its ORIGINAL content. Keyed by title+dates
+  // so two items sharing a title (e.g. two roles at the same lab) don't collide.
   function addBackWork(title: string) {
-    const item = profile.work.find((w) => titleMatches(title, w.position, w.name));
-    if (item) setCurated((c) => (c ? { ...c, work: [...c.work, item] } : c));
+    setCurated((c) => {
+      if (!c) return c;
+      const present = new Set(c.work.map(workKey));
+      const item = profile.work.find(
+        (w) => titleMatches(title, w.position, w.name) && !present.has(workKey(w)),
+      );
+      return item ? { ...c, work: [...c.work, item] } : c;
+    });
   }
   function addBackProject(title: string) {
-    const item = profile.projects.find((p) => titleMatches(title, p.name));
-    if (item) setCurated((c) => (c ? { ...c, projects: [...c.projects, item] } : c));
+    setCurated((c) => {
+      if (!c) return c;
+      const present = new Set(c.projects.map((p) => p.name));
+      const item = profile.projects.find((p) => titleMatches(title, p.name) && !present.has(p.name));
+      return item ? { ...c, projects: [...c.projects, item] } : c;
+    });
   }
 
   return (
@@ -302,33 +356,10 @@ export function GenerateStep({
           </div>
         ) : (
           <div className="space-y-4">
-            {tailored.emphasis.length ? (
-              <div>
-                <div className="label">Emphasized</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {tailored.emphasis.map((k, i) => (
-                    <Chip key={i} tone="brand">
-                      {k}
-                    </Chip>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {tailored.changeNotes.length ? (
-              <div>
-                <div className="label">What changed</div>
-                <ul className="list-disc space-y-1 pl-5 text-sm text-slate-300">
-                  {tailored.changeNotes.map((n, i) => (
-                    <li key={i}>{n}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
             <CurationEditor
               profile={resumeProfile}
               dropped={tailored.dropped}
+              pageTarget={pageTarget}
               onDropWork={dropWork}
               onDropProject={dropProject}
               onMoveWork={moveWork}
@@ -344,12 +375,53 @@ export function GenerateStep({
               <button
                 type="button"
                 className="btn-ghost"
+                onClick={() => downloadText(profileToLatex(resumeProfile), `${sanitize(profile.basics.name)}_resume.tex`, "application/x-tex")}
+              >
+                Download .tex
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => openInOverleaf(profileToLatex(resumeProfile))}
+              >
+                Open in Overleaf ↗
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
                 disabled={loading.tailor}
                 onClick={runTailor}
               >
                 {loading.tailor ? <Spinner /> : null} Re-curate ({pageTarget}p)
               </button>
             </div>
+
+            {/* Secondary detail — collapsed to keep the view clean (#25). */}
+            {tailored.emphasis.length || tailored.changeNotes.length ? (
+              <details className="text-sm">
+                <summary className="cursor-pointer text-xs uppercase tracking-wide text-slate-400">
+                  Emphasis & what changed
+                </summary>
+                <div className="mt-2 space-y-3">
+                  {tailored.emphasis.length ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {tailored.emphasis.slice(0, 12).map((k, i) => (
+                        <Chip key={i} tone="brand">
+                          {k}
+                        </Chip>
+                      ))}
+                    </div>
+                  ) : null}
+                  {tailored.changeNotes.length ? (
+                    <ul className="list-disc space-y-1 pl-5 text-slate-300">
+                      {tailored.changeNotes.map((n, i) => (
+                        <li key={i}>{n}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              </details>
+            ) : null}
             <ErrorBanner message={errors.tailor} />
           </div>
         )}
@@ -506,6 +578,10 @@ export function GenerateStep({
   );
 }
 
+function workKey(w: { position?: string; name?: string; startDate?: string; endDate?: string }): string {
+  return [w.position, w.name, w.startDate, w.endDate].join("|");
+}
+
 function titleMatches(title: string, ...fields: (string | undefined)[]): boolean {
   const t = (title || "").toLowerCase().trim();
   if (!t) return false;
@@ -520,6 +596,7 @@ function titleMatches(title: string, ...fields: (string | undefined)[]): boolean
 function CurationEditor({
   profile,
   dropped,
+  pageTarget,
   onDropWork,
   onDropProject,
   onMoveWork,
@@ -531,6 +608,7 @@ function CurationEditor({
 }: {
   profile: Profile;
   dropped: DroppedItem[];
+  pageTarget: 1 | 2;
   onDropWork: (i: number) => void;
   onDropProject: (i: number) => void;
   onMoveWork: (i: number, dir: -1 | 1) => void;
@@ -548,8 +626,24 @@ function CurationEditor({
       : !profile.projects.some((p) => titleMatches(d.title, p.name)),
   );
 
+  const est = estimatePages(profile);
+  const overTarget = est > pageTarget + 0.08;
+
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-slate-400">
+          Estimated length:{" "}
+          <span className={overTarget ? "font-semibold text-amber-300" : "font-semibold text-emerald-300"}>
+            ≈ {est.toFixed(1)} page{est >= 1.05 ? "s" : ""}
+          </span>{" "}
+          (target {pageTarget})
+        </span>
+        {overTarget ? (
+          <span className="text-xs text-amber-300/80">over target — drop or trim items below</span>
+        ) : null}
+      </div>
+
       {profile.basics.summary ? (
         <p className="rounded-lg border border-white/10 bg-slate-900/40 p-3 text-sm text-slate-200">
           {profile.basics.summary}
@@ -558,7 +652,11 @@ function CurationEditor({
 
       <ReorderList
         title="Experience — resume order"
-        labels={profile.work.map((w) => [w.position, w.name].filter(Boolean).join(" · ") || "Untitled")}
+        labels={profile.work.map((w) => {
+          const base = [w.position, w.name].filter(Boolean).join(" · ") || "Untitled";
+          const d = [w.startDate, w.endDate].filter(Boolean).join("–");
+          return d ? `${base} (${d})` : base;
+        })}
         onMove={onMoveWork}
         onDrop={onDropWork}
         onReorder={onReorderWork}

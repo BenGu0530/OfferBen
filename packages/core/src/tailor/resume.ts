@@ -32,6 +32,13 @@ export async function tailorResume(
   ai: AIProvider,
   { profile, job, parsed, match, pageTarget = 2 }: TailorResumeInput,
 ): Promise<TailoredResume> {
+  // Concrete content budget — "1 page" alone isn't enough for the model to
+  // gauge rendered length, so give it hard counts.
+  const budget =
+    pageTarget === 1
+      ? "ONE page (~45-55 lines): keep AT MOST 3 experiences and 2 projects, <=3 bullets each, summary <=2 lines. Cut hard — drop weaker items entirely."
+      : "TWO pages: at most ~5 experiences and ~4 projects, <=4 bullets each, summary <=3 lines.";
+
   const prompt = [
     "CURATE the candidate's resume for the target job — don't just dump everything in.",
     "",
@@ -41,7 +48,7 @@ export async function tailorResume(
     "- Never invent experiences or projects. You may only SELECT, DROP, REORDER, and REWORD existing ones.",
     "",
     "CURATION:",
-    `- Target length: ${pageTarget} page${pageTarget > 1 ? "s" : ""}. Cut to fit — be selective.`,
+    `- LENGTH BUDGET — ${budget}`,
     "- SELECT the work & projects that best support THIS role; DROP the ones that don't add value",
     "  for it (e.g. unrelated domains). Put every dropped item in `dropped` with a one-line reason.",
     "- ORDER the kept work[] and projects[] most-relevant-first, so the recruiter sees the",

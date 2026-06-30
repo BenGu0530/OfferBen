@@ -2,8 +2,7 @@
 
 Welcome! This is a small two-person open-source project. Read
 **[CLAUDE.md](CLAUDE.md)** first — it's the shared context and the invariants not
-to break. Status lives in [PROJECT_PLAN.md](PROJECT_PLAN.md)
-(中文速览：[PROJECT_PLAN.zh.md](PROJECT_PLAN.zh.md)). Open work is in
+to break. Status lives in [PROJECT_PLAN.md](PROJECT_PLAN.md)（中文）. Open work is in
 [GitHub Issues](../../issues).
 
 ## Prerequisites

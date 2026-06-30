@@ -10,6 +10,7 @@ export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
 // often available when one is congested. Deduped against the primary.
 const DEFAULT_FALLBACK_MODELS = [
   "gemini-2.0-flash-lite",
+  "gemini-3.5-flash", // separate, lightly-used quota bucket
   "gemini-2.5-flash",
   "gemini-2.0-flash",
 ];

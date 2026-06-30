@@ -86,8 +86,8 @@ for the side-panel + Google Drive setup (one-time OAuth redirect URI).
 
 Read **[CLAUDE.md](CLAUDE.md)** first — it's the shared context (architecture,
 conventions, and the invariants not to break) for both humans and AI agents.
-**[PROJECT_PLAN.md](PROJECT_PLAN.md)** is the living status + decision log; update
-it as you go (concise Chinese summary: [PROJECT_PLAN.zh.md](PROJECT_PLAN.zh.md)). Personal notes/keys go in `CLAUDE.local.md` (copy from
+**[PROJECT_PLAN.md](PROJECT_PLAN.md)** is the living status + decision log (中文);
+update it as you go. Personal notes/keys go in `CLAUDE.local.md` (copy from
 `CLAUDE.local.md.example`; it's git-ignored). Run `npm run typecheck` before you
 commit. Open work is tracked in GitHub Issues (see `docs/ISSUES.md` for the
 starter backlog).
