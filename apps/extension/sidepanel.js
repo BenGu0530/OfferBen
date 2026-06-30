@@ -99,6 +99,11 @@ async function getActiveTab() {
   return tab;
 }
 
+// The OfferBen web app is not a job posting — never score our own pages.
+function isOwnApp(url) {
+  return Boolean(url) && url.startsWith(appUrl.replace(/\/+$/, ""));
+}
+
 // Read the JD off the current page (silent: no error flash while just browsing).
 // allowVision: if DOM parsing fails, fall back to a screenshot + vision model.
 // Gated to explicit actions (open / ⟳) so silent navigations don't burn quota.
@@ -148,6 +153,12 @@ async function run({ silent = false, force = false } = {}) {
     toggleScoreBtn(false);
     const tab = await getActiveTab();
     const url = tab?.url || "";
+
+    if (isOwnApp(url)) {
+      setJobLine(null);
+      setStatus("You're in the OfferBen app. Open a job posting in another tab to score it.");
+      return;
+    }
 
     // Cache hit: render instantly, spend 0 API calls.
     if (!force && url && matchCache[url]) {
@@ -366,6 +377,12 @@ async function previewJob() {
   if (!tab || !tab.id || /^(chrome|edge|about|chrome-extension):/.test(url)) {
     setJobLine(null);
     setStatus("Open a job posting, then click Score.");
+    toggleScoreBtn(false);
+    return;
+  }
+  if (isOwnApp(url)) {
+    setJobLine(null);
+    setStatus("You're in the OfferBen app. Open a job posting in another tab to score it.");
     toggleScoreBtn(false);
     return;
   }
