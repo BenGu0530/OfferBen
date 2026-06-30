@@ -12,6 +12,7 @@ export type {
   ParsedJob,
   MatchResult,
   TailoredResume,
+  DroppedItem,
   ReferralQA,
   ReferralQAItem,
   LetterKind,

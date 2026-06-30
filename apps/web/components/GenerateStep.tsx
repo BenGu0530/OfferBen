@@ -7,6 +7,7 @@ import { driveEnabled, saveApplicationToDrive } from "@/lib/drive";
 import { storage } from "@/lib/storage";
 import type {
   ApplicationRecord,
+  DroppedItem,
   Job,
   MatchResult,
   ParsedJob,
@@ -91,6 +92,10 @@ export function GenerateStep({
   onTrackerChange?: (list: ApplicationRecord[]) => void;
 }) {
   const [tailored, setTailored] = useState<TailoredResume | null>(null);
+  const [pageTarget, setPageTarget] = useState<1 | 2>(2);
+  // Editable curated resume (starts from the AI's selection; the user can drop /
+  // reorder items without spending another AI call).
+  const [curated, setCurated] = useState<Profile | null>(null);
   const [letters, setLetters] = useState<Partial<Record<LetterKey, string>>>({});
   const [qa, setQa] = useState<ReferralQA | null>(null);
   const [loading, setLoading] = useState<Record<string, boolean>>({});
@@ -153,8 +158,10 @@ export function GenerateStep({
         job,
         parsed: parsed ?? undefined,
         match: match ?? undefined,
+        pageTarget,
       });
       setTailored(resume);
+      setCurated(resume.profile);
     } catch (err) {
       setErr("tailor", err instanceof Error ? err.message : "Failed.");
     } finally {
@@ -189,7 +196,28 @@ export function GenerateStep({
   }
 
   const fileName = `${sanitize(profile.basics.name)}_${sanitize(job.company || job.title)}.pdf`;
-  const resumeProfile = tailored?.profile ?? profile;
+  const resumeProfile = curated ?? tailored?.profile ?? profile;
+
+  // Drop / reorder items in the curated resume (client-side, no AI call).
+  function dropWork(i: number) {
+    setCurated((c) => (c ? { ...c, work: c.work.filter((_, j) => j !== i) } : c));
+  }
+  function dropProject(i: number) {
+    setCurated((c) => (c ? { ...c, projects: c.projects.filter((_, j) => j !== i) } : c));
+  }
+  function move<T>(arr: T[], i: number, dir: -1 | 1): T[] {
+    const j = i + dir;
+    if (j < 0 || j >= arr.length) return arr;
+    const next = arr.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    return next;
+  }
+  function moveWork(i: number, dir: -1 | 1) {
+    setCurated((c) => (c ? { ...c, work: move(c.work, i, dir) } : c));
+  }
+  function moveProject(i: number, dir: -1 | 1) {
+    setCurated((c) => (c ? { ...c, projects: move(c.projects, i, dir) } : c));
+  }
 
   return (
     <div className="space-y-6">
@@ -202,9 +230,23 @@ export function GenerateStep({
         {!tailored ? (
           <div className="space-y-3">
             <p className="text-sm text-slate-400">
-              Rewrite and reorder your resume to emphasize what this job wants —
-              without fabricating anything.
+              <b>Curates</b> your resume for this job — selects the most relevant
+              experiences & projects, drops the ones that don&apos;t help, orders
+              the strongest first, and rewords. Never fabricates.
             </p>
+            <div className="flex items-center gap-2">
+              <span className="label mb-0">Length</span>
+              {([1, 2] as const).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={pageTarget === n ? "btn-primary px-3 py-1 text-xs" : "btn-ghost px-3 py-1 text-xs"}
+                  onClick={() => setPageTarget(n)}
+                >
+                  {n} page{n > 1 ? "s" : ""}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               className="btn-primary"
@@ -212,7 +254,7 @@ export function GenerateStep({
               onClick={runTailor}
             >
               {loading.tailor ? <Spinner /> : null}
-              {loading.tailor ? "Tailoring…" : "Generate tailored resume"}
+              {loading.tailor ? "Curating…" : "Curate tailored resume"}
             </button>
             <ErrorBanner message={errors.tailor} />
           </div>
@@ -242,7 +284,14 @@ export function GenerateStep({
               </div>
             ) : null}
 
-            <TailoredPreview resume={tailored} />
+            <CurationEditor
+              profile={resumeProfile}
+              dropped={tailored.dropped}
+              onDropWork={dropWork}
+              onDropProject={dropProject}
+              onMoveWork={moveWork}
+              onMoveProject={moveProject}
+            />
 
             <div className="flex flex-wrap items-center gap-2">
               <ResumeDownloadButton profile={resumeProfile} fileName={fileName} />
@@ -252,7 +301,7 @@ export function GenerateStep({
                 disabled={loading.tailor}
                 onClick={runTailor}
               >
-                {loading.tailor ? <Spinner /> : null} Regenerate
+                {loading.tailor ? <Spinner /> : null} Re-curate ({pageTarget}p)
               </button>
             </div>
             <ErrorBanner message={errors.tailor} />
@@ -375,29 +424,115 @@ export function GenerateStep({
   );
 }
 
-function TailoredPreview({ resume }: { resume: TailoredResume }) {
-  const p = resume.profile;
+function CurationEditor({
+  profile,
+  dropped,
+  onDropWork,
+  onDropProject,
+  onMoveWork,
+  onMoveProject,
+}: {
+  profile: Profile;
+  dropped: DroppedItem[];
+  onDropWork: (i: number) => void;
+  onDropProject: (i: number) => void;
+  onMoveWork: (i: number, dir: -1 | 1) => void;
+  onMoveProject: (i: number, dir: -1 | 1) => void;
+}) {
   return (
-    <div className="rounded-lg border border-white/10 bg-slate-900/40 p-4 text-sm">
-      {p.basics.summary ? (
-        <p className="text-slate-200">{p.basics.summary}</p>
+    <div className="space-y-4">
+      {profile.basics.summary ? (
+        <p className="rounded-lg border border-white/10 bg-slate-900/40 p-3 text-sm text-slate-200">
+          {profile.basics.summary}
+        </p>
       ) : null}
-      {p.work.slice(0, 3).map((w, i) => (
-        <div key={i} className="mt-3">
-          <div className="font-medium text-white">
-            {w.position}
-            {w.name ? ` · ${w.name}` : ""}
-          </div>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-slate-300">
-            {w.highlights.slice(0, 3).map((h, j) => (
-              <li key={j}>{h}</li>
+
+      <ReorderList
+        title="Experience — resume order"
+        labels={profile.work.map((w) => [w.position, w.name].filter(Boolean).join(" · ") || "Untitled")}
+        onMove={onMoveWork}
+        onDrop={onDropWork}
+      />
+      <ReorderList
+        title="Projects — resume order"
+        labels={profile.projects.map((p) => p.name || "Untitled")}
+        onMove={onMoveProject}
+        onDrop={onDropProject}
+      />
+
+      {dropped.length ? (
+        <div>
+          <div className="label">Dropped for this role</div>
+          <ul className="space-y-1 text-sm text-slate-400">
+            {dropped.map((d, i) => (
+              <li key={i}>
+                <span className="text-slate-300">{d.title}</span>
+                {d.reason ? ` — ${d.reason}` : ""}
+              </li>
             ))}
           </ul>
         </div>
-      ))}
-      <p className="mt-3 text-xs text-slate-500">
-        Download the PDF for the full, formatted, ATS-safe resume.
+      ) : null}
+
+      <p className="text-xs text-slate-500">
+        Reorder / remove items above to control what the recruiter sees first — the PDF
+        updates instantly (no AI call). Download for the full formatted, ATS-safe resume.
       </p>
+    </div>
+  );
+}
+
+function ReorderList({
+  title,
+  labels,
+  onMove,
+  onDrop,
+}: {
+  title: string;
+  labels: string[];
+  onMove: (i: number, dir: -1 | 1) => void;
+  onDrop: (i: number) => void;
+}) {
+  if (!labels.length) return null;
+  return (
+    <div>
+      <div className="label">{title}</div>
+      <ul className="space-y-1">
+        {labels.map((label, i) => (
+          <li
+            key={i}
+            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-1.5 text-sm"
+          >
+            <span className="flex-1 truncate text-slate-200">{label}</span>
+            <button
+              type="button"
+              className="px-1 text-slate-400 hover:text-white disabled:opacity-30"
+              disabled={i === 0}
+              onClick={() => onMove(i, -1)}
+              title="Move up"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="px-1 text-slate-400 hover:text-white disabled:opacity-30"
+              disabled={i === labels.length - 1}
+              onClick={() => onMove(i, 1)}
+              title="Move down"
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              className="px-1 text-slate-500 hover:text-red-300"
+              onClick={() => onDrop(i)}
+              title="Remove from this resume"
+            >
+              ✕
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

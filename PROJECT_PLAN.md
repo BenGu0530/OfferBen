@@ -231,6 +231,12 @@ Extension: `chrome://extensions` → Developer mode → Load unpacked → `apps/
 - **Match = 1 AI call**: dropped the separate parseJob; keyword data is derived
   from the match result. Extension caches scores per URL (revisits cost 0 calls)
   to stretch the free tier.
+- **Resume curation (not just rewrite)**: the tailor step now SELECTS the work/
+  projects worth showing for a role, DROPS the rest (with reasons), orders
+  most-relevant-first, and targets 1 or 2 pages — then the user can remove/reorder
+  items client-side (no extra AI call) before exporting. This is the core
+  differentiator: a dump-everything resume needs no tool. Verified it drops an
+  unrelated project (e.g. a bakery website) for a robotics role.
 - **Model fallback for reliability**: `GeminiProvider` tries a chain of models
   (primary → `gemini-2.0-flash-lite` → `gemini-2.5-flash` → `gemini-2.0-flash`).
   Free-tier models get deprioritized during demand spikes (503 UNAVAILABLE);

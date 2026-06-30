@@ -39,6 +39,7 @@ export const api = {
     job: Job;
     parsed?: ParsedJob;
     match?: MatchResult;
+    pageTarget?: 1 | 2;
   }) => postJSON<{ resume: TailoredResume }>("/api/tailor", input),
 
   letter: (input: {

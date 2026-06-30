@@ -1,9 +1,23 @@
 import { z } from "zod";
 import { ProfileSchema } from "./profile";
 
-/** A resume rewritten/reordered to target a specific job. */
+/** An experience/project the model left OFF the resume for this role, + why. */
+export const DroppedItemSchema = z.object({
+  kind: z.enum(["work", "project"]).default("project"),
+  title: z.string().default(""),
+  reason: z.string().default(""),
+});
+export type DroppedItem = z.infer<typeof DroppedItemSchema>;
+
+/**
+ * A resume CURATED for a specific job: `profile` contains only the experiences
+ * and projects worth showing, reordered most-relevant-first and reworded;
+ * `dropped` lists what was intentionally left off and why.
+ */
 export const TailoredResumeSchema = z.object({
   profile: ProfileSchema,
+  /** Items deliberately excluded for this role (with rationale). */
+  dropped: z.array(DroppedItemSchema).default([]),
   /** Keywords that were surfaced/emphasized for this role. */
   emphasis: z.array(z.string()).default([]),
   /** Brief, human-readable notes on what was changed and why. */

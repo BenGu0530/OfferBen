@@ -16,6 +16,7 @@ interface Body {
   job: unknown;
   parsed?: ParsedJob;
   match?: MatchResult;
+  pageTarget?: 1 | 2;
 }
 
 export const POST = jsonHandler<Body>(async (body) => {
@@ -27,6 +28,7 @@ export const POST = jsonHandler<Body>(async (body) => {
     job,
     parsed: body.parsed,
     match: body.match,
+    pageTarget: body.pageTarget === 1 ? 1 : 2,
   });
   return { resume };
 });
