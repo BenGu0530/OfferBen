@@ -27,6 +27,9 @@ export interface ApplicationRecord {
   verdict?: string;
   status: ApplicationStatus;
   notes?: string;
+  /** Drive file holding the generated docs for this application (app-created). */
+  driveFileId?: string;
+  driveUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

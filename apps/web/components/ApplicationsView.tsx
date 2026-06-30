@@ -78,6 +78,19 @@ export function ApplicationsView({
                   {a.company || "—"}
                   {a.verdict ? ` · ${a.verdict}` : ""}
                   {` · ${new Date(a.updatedAt).toLocaleDateString()}`}
+                  {a.driveUrl ? (
+                    <>
+                      {" · "}
+                      <a
+                        href={a.driveUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-brand-300 hover:underline"
+                      >
+                        📄 Drive
+                      </a>
+                    </>
+                  ) : null}
                 </div>
               </div>
 

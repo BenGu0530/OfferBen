@@ -185,6 +185,7 @@ export default function HomePage() {
           parsed={parsed}
           match={match}
           onBack={() => setStep(2)}
+          onTrackerChange={setApplications}
         />
       )}
       </>

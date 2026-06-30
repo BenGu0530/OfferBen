@@ -98,6 +98,11 @@ Supabase (optional).
       Drive buttons appear only when `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is set.
 - [x] Application tracker: save scored jobs (score/verdict/status/date), edit
       status (saved→applied→interviewing→rejected→offer), syncs in AppData to Drive.
+- [x] Generated docs → Drive files: "Save to Drive" in the Generate step writes a
+      readable Markdown application doc to `My Drive/OfferBen/applications/`
+      (app-created, so it round-trips under `drive.file`); the tracker links to it
+      ("📄 Drive"). Chosen over inlining in one JSON so each application is a file
+      the user can browse/open/share — lower-barrier + open-source friendly.
 - [x] Editable profile: fix name/headline/email/phone/skills after AI extraction.
 
 ### Phase 2 — Extension (partial)
