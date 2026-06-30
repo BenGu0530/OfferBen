@@ -220,6 +220,12 @@ Extension: `chrome://extensions` → Developer mode → Load unpacked → `apps/
 - **Match = 1 AI call**: dropped the separate parseJob; keyword data is derived
   from the match result. Extension caches scores per URL (revisits cost 0 calls)
   to stretch the free tier.
+- **Model fallback for reliability**: `GeminiProvider` tries a chain of models
+  (primary → `gemini-2.0-flash-lite` → `gemini-2.5-flash` → `gemini-2.0-flash`).
+  Free-tier models get deprioritized during demand spikes (503 UNAVAILABLE);
+  each model is a separate capacity pool, so falling over makes calls succeed
+  instead of dying after a few retries. Validated end-to-end (2026-06-24):
+  match, tailor, letters, people dossier+taste, and vision capture all work.
 - **Cloud sync = user's own Google Drive (not our server)**: chose "bring your own
   storage" so the published app never holds anyone's resume PII, needs no backend,
   and works for everyone for free. Uses the least-privilege `drive.file` scope
