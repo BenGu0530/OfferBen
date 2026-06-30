@@ -19,6 +19,9 @@ const els = {
   scoreBtn: document.getElementById("score-btn"),
   importLi: document.getElementById("import-li"),
   autoScore: document.getElementById("autoscore"),
+  genStatus: document.getElementById("gen-status"),
+  genOut: document.getElementById("gen-out"),
+  genCopy: document.getElementById("gen-copy"),
 };
 
 let appUrl = DEFAULT_APP_URL;
@@ -91,6 +94,7 @@ function renderMatch(match) {
   );
   toggleScoreBtn(false);
   toggleImportBtn(false);
+  resetGen();
   show("result");
 }
 
@@ -397,6 +401,42 @@ async function autofill() {
   }
 }
 
+// Inline generation: write a letter for the scored job, in the panel.
+async function genLetter(kind) {
+  if (!currentJob) return;
+  const profile = await getCachedProfile();
+  if (!profile) {
+    show("connect");
+    return;
+  }
+  els.genOut.classList.add("hidden");
+  els.genCopy.classList.add("hidden");
+  els.genStatus.textContent = "Writing…";
+  try {
+    const res = await fetch(`${appUrl.replace(/\/+$/, "")}/api/letters`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile, job: currentJob, kind }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.text) throw new Error(data.error || `Failed (${res.status}).`);
+    els.genStatus.textContent = "";
+    els.genOut.textContent = data.text;
+    els.genOut.classList.remove("hidden");
+    els.genCopy.classList.remove("hidden");
+  } catch (err) {
+    els.genStatus.textContent = err && err.message ? err.message : "Failed.";
+  }
+}
+
+function resetGen() {
+  if (!els.genOut) return;
+  els.genOut.classList.add("hidden");
+  els.genOut.textContent = "";
+  els.genCopy.classList.add("hidden");
+  els.genStatus.textContent = "";
+}
+
 async function tailorInOfferBen() {
   if (!currentJob) return;
   const job = { ...currentJob, url: lastUrl || "", source: currentJob.source || "extension" };
@@ -503,6 +543,14 @@ async function init() {
   els.scoreBtn.addEventListener("click", () => run({ force: true }));
   els.importLi.addEventListener("click", importLinkedIn);
   els.open.addEventListener("click", tailorInOfferBen);
+  document.getElementById("gen-cover").addEventListener("click", () => genLetter("coverLetter"));
+  document.getElementById("gen-recruiter").addEventListener("click", () => genLetter("recruiterEmail"));
+  document.getElementById("gen-referral").addEventListener("click", () => genLetter("referralNote"));
+  els.genCopy.addEventListener("click", () => {
+    navigator.clipboard.writeText(els.genOut.textContent || "").catch(() => {});
+    els.genCopy.textContent = "Copied!";
+    setTimeout(() => (els.genCopy.textContent = "Copy"), 1500);
+  });
   document.getElementById("autofill").addEventListener("click", autofill);
   els.connectBtn.addEventListener("click", doConnect);
   els.resync.addEventListener("click", doConnect);
