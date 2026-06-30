@@ -11,9 +11,50 @@ import type { Job } from "./types";
  * Keeping the handoff in the URL means the extension never needs the Gemini key
  * (which stays server-side here). This helper decodes that payload.
  */
-export function readJobFromUrl(): Job | null {
+/**
+ * The extension hands a captured job to the web app. Preferred path: `?h=<id>`,
+ * a short token resolved via /api/handoff (keeps the long JD out of the URL —
+ * the old base64-in-URL approach overflowed header limits → HTTP 431). Legacy
+ * `?job=<base64>` is still decoded as a fallback.
+ */
+export async function readJobFromUrl(): Promise<Job | null> {
   if (typeof window === "undefined") return null;
   const params = new URLSearchParams(window.location.search);
+
+  const token = params.get("h");
+  if (token) {
+    try {
+      const res = await fetch(`/api/handoff?id=${encodeURIComponent(token)}`);
+      cleanUrl(params, "h");
+      if (!res.ok) return null;
+      const { job } = (await res.json()) as { job?: Partial<Job> };
+      return job && String(job.description ?? "").trim() ? normalizeJob(job) : null;
+    } catch {
+      cleanUrl(params, "h");
+      return null;
+    }
+  }
+
+  return readLegacyJob(params);
+}
+
+function normalizeJob(obj: Partial<Job>): Job {
+  return {
+    title: String(obj.title ?? ""),
+    company: String(obj.company ?? ""),
+    url: obj.url ? String(obj.url) : undefined,
+    source: obj.source ? String(obj.source) : undefined,
+    description: String(obj.description ?? ""),
+  };
+}
+
+function cleanUrl(params: URLSearchParams, key: string) {
+  params.delete(key);
+  const clean = window.location.pathname + (params.toString() ? `?${params}` : "");
+  window.history.replaceState({}, "", clean);
+}
+
+function readLegacyJob(params: URLSearchParams): Job | null {
   const raw = params.get("job");
   if (!raw) return null;
 

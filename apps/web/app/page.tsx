@@ -38,17 +38,17 @@ export default function HomePage() {
     if (p) setProfileState(p);
     setApplications(storage.loadApplications());
 
-    const incoming = readJobFromUrl();
-    if (incoming) {
-      setJobState(incoming);
-      storage.saveJob(incoming);
-      if (p) setStep(2);
-      else setStep(0);
-      return;
-    }
-
-    const j = storage.loadJob();
-    if (j) setJobState(j);
+    void (async () => {
+      const incoming = await readJobFromUrl();
+      if (incoming) {
+        setJobState(incoming);
+        storage.saveJob(incoming);
+        setStep(p ? 2 : 0);
+        return;
+      }
+      const j = storage.loadJob();
+      if (j) setJobState(j);
+    })();
   }, []);
 
   function setProfile(p: Profile) {

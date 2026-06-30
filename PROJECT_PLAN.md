@@ -109,9 +109,13 @@ Supabase (optional).
 - [x] MV3 manifest + popup UI (capture, edit, send).
 - [x] JD extraction adapters: Greenhouse, Lever, Ashby, Workday + generic fallback.
 - [x] "Open in OfferBen" handoff (key stays server-side).
-- [x] **Side Panel UI** (v0.2): docks next to the live job page and auto-reads it
-      as the user browses (no copy-paste / no window arranging). Chrome/Edge 114+.
-      Reuses the `extract.js` adapters; popup kept as legacy.
+- [x] **Side Panel UI** (v0.2): docks next to the live job page, reads it, and
+      scores it. Chrome/Edge 114+. Reuses the `extract.js` adapters; popup legacy.
+      - **Scoring is manual by default** ("⚡ Score this job" button) — an
+        "Auto-score as I browse" toggle (Settings) opts into per-page AI. Avoids
+        spending quota / firing on every page (incl. non-job pages).
+      - Extension→web handoff uses a short token via `/api/handoff` (POST→id,
+        open `/?h=id`); the old base64-JD-in-URL overflowed headers (HTTP 431).
 
 ---
 

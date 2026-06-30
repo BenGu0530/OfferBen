@@ -16,11 +16,14 @@ const els = {
   reread: document.getElementById("reread"),
   resync: document.getElementById("resync"),
   appUrl: document.getElementById("app-url"),
+  scoreBtn: document.getElementById("score-btn"),
+  autoScore: document.getElementById("autoscore"),
 };
 
 let appUrl = DEFAULT_APP_URL;
 let currentJob = null; // last successfully read job
 let lastUrl = null;
+let autoScore = false; // off by default: don't spend AI on every page you open
 let matchCache = {}; // url -> { job, match } so revisits cost 0 API calls
 
 const CACHE_KEY = "matchCache";
@@ -85,6 +88,7 @@ function renderMatch(match) {
       return li;
     }),
   );
+  toggleScoreBtn(false);
   show("result");
 }
 
@@ -141,6 +145,7 @@ async function readJob({ silent = false, allowVision = false } = {}) {
 // `force` re-scores even if cached (the ⟳ button).
 async function run({ silent = false, force = false } = {}) {
   try {
+    toggleScoreBtn(false);
     const tab = await getActiveTab();
     const url = tab?.url || "";
 
@@ -181,6 +186,7 @@ async function run({ silent = false, force = false } = {}) {
     }
   } catch (err) {
     setStatus(err && err.message ? err.message : "Something went wrong.", true);
+    toggleScoreBtn(true); // let the user retry
   }
 }
 
@@ -324,11 +330,20 @@ async function tailorInOfferBen() {
   if (!currentJob) return;
   const job = { ...currentJob, url: lastUrl || "", source: currentJob.source || "extension" };
   const base = appUrl.replace(/\/+$/, "");
-  const utf8 = encodeURIComponent(JSON.stringify(job)).replace(/%([0-9A-F]{2})/g, (_, h) =>
-    String.fromCharCode(parseInt(h, 16)),
-  );
-  const payload = btoa(utf8).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  await chrome.tabs.create({ url: `${base}/?job=${payload}` });
+  // Hand the job off via a short token, not the full JD in the URL (that
+  // overflowed header limits → HTTP 431).
+  try {
+    const res = await fetch(`${base}/api/handoff`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.id) throw new Error(data.error || "Handoff failed.");
+    await chrome.tabs.create({ url: `${base}/?h=${data.id}` });
+  } catch (err) {
+    setStatus(err && err.message ? err.message : "Couldn't open OfferBen.", true);
+  }
 }
 
 async function doConnect() {
@@ -342,23 +357,67 @@ async function doConnect() {
   }
 }
 
-// --- auto re-run as the user moves between pages ---------------------------
+// Cheap, AI-free: detect the job on the current page and show it, but DON'T
+// score until the user clicks (or auto-score is on). Renders a cached score if
+// we already scored this URL.
+async function previewJob() {
+  const tab = await getActiveTab();
+  const url = tab?.url || "";
+  if (!tab || !tab.id || /^(chrome|edge|about|chrome-extension):/.test(url)) {
+    setJobLine(null);
+    setStatus("Open a job posting, then click Score.");
+    toggleScoreBtn(false);
+    return;
+  }
+  if (matchCache[url]) {
+    lastUrl = url;
+    currentJob = matchCache[url].job;
+    setJobLine(currentJob);
+    renderMatch(matchCache[url].match);
+    return;
+  }
+  const profile = await getCachedProfile();
+  const job = await readJob({ silent: true, allowVision: false }); // DOM only, no AI
+  if (job) {
+    currentJob = job;
+    lastUrl = url;
+    setJobLine(job);
+  }
+  if (!profile) {
+    show("connect");
+    toggleScoreBtn(false);
+    return;
+  }
+  setStatus(job ? "Ready — click Score to rate this job." : "No job detected here. Open a posting, then Score.");
+  toggleScoreBtn(true);
+}
+
+function toggleScoreBtn(showIt) {
+  if (els.scoreBtn) els.scoreBtn.classList.toggle("hidden", !showIt);
+}
+
+// --- as the user moves between pages: auto-score only if the toggle is on ----
 
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   const tab = await chrome.tabs.get(tabId).catch(() => null);
-  if (tab?.url && tab.url !== lastUrl) run({ silent: true });
+  if (tab?.url && tab.url !== lastUrl) autoScore ? run({ silent: true }) : previewJob();
 });
 chrome.tabs.onUpdated.addListener((_id, info, tab) => {
-  if (info.status === "complete" && tab.active && tab.url !== lastUrl) run({ silent: true });
+  if (info.status === "complete" && tab.active && tab.url !== lastUrl) {
+    autoScore ? run({ silent: true }) : previewJob();
+  }
 });
 
 async function init() {
-  const stored = await chrome.storage.local.get("appUrl");
+  const stored = await chrome.storage.local.get(["appUrl", "autoScore"]);
   appUrl = stored.appUrl || DEFAULT_APP_URL;
+  autoScore = Boolean(stored.autoScore);
   els.appUrl.value = appUrl;
+  if (els.autoScore) els.autoScore.checked = autoScore;
   await loadCache();
 
   els.reread.addEventListener("click", () => run({ force: true }));
+  els.scoreBtn.addEventListener("click", () => run({ force: true }));
   els.open.addEventListener("click", tailorInOfferBen);
   document.getElementById("autofill").addEventListener("click", autofill);
   els.connectBtn.addEventListener("click", doConnect);
@@ -367,8 +426,15 @@ async function init() {
     appUrl = els.appUrl.value.trim() || DEFAULT_APP_URL;
     chrome.storage.local.set({ appUrl });
   });
+  els.autoScore.addEventListener("change", () => {
+    autoScore = els.autoScore.checked;
+    chrome.storage.local.set({ autoScore });
+    if (autoScore) run({ force: true });
+  });
 
-  await run();
+  // Default: just detect + show the job; score on click. (Auto-score if enabled.)
+  if (autoScore) await run();
+  else await previewJob();
 }
 
 document.addEventListener("DOMContentLoaded", init);

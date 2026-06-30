@@ -18,7 +18,10 @@
 
     <main id="main">
       <!-- transient status / empty states -->
-      <div id="status" class="status">Open a job posting — I'll score it automatically.</div>
+      <div id="status" class="status">Open a job posting, then click Score.</div>
+
+      <!-- manual trigger (default): score only when you ask -->
+      <button id="score-btn" class="btn primary hidden">⚡ Score this job</button>
 
       <!-- connect-profile prompt (shown when no profile is synced yet) -->
       <section id="connect" class="hidden card">
@@ -61,6 +64,10 @@
     <footer class="foot">
       <details>
         <summary class="muted">Settings</summary>
+        <label class="toggle">
+          <input id="autoscore" type="checkbox" />
+          <span>Auto-score as I browse (uses AI on every job page)</span>
+        </label>
         <label class="lbl">OfferBen app URL</label>
         <input id="app-url" class="inp small" type="text" placeholder="http://localhost:3000" />
         <button id="resync" class="btn ghost small">Re-sync profile from Drive</button>
