@@ -4,6 +4,7 @@ import { aiHeaders } from "./aiSettings";
 import type {
   AuthorCandidate,
   AuthorDossier,
+  InterviewPrep,
   Job,
   MatchResult,
   OutreachKind,
@@ -52,6 +53,9 @@ export const api = {
 
   referralQA: (input: { profile: Profile; job: Job }) =>
     postJSON<{ qa: ReferralQA }>("/api/letters", { ...input, kind: "referralQA" }),
+
+  interview: (input: { profile: Profile; job: Job }) =>
+    postJSON<{ prep: InterviewPrep }>("/api/interview", input),
 
   searchPeople: (input: { name: string; institution?: string }) =>
     postJSON<{ candidates: AuthorCandidate[] }>("/api/people/search", input),

@@ -36,5 +36,19 @@ export const ReferralQASchema = z.object({
 });
 export type ReferralQA = z.infer<typeof ReferralQASchema>;
 
+export const InterviewQASchema = z.object({
+  question: z.string().default(""),
+  /** "behavioral" | "technical". */
+  type: z.string().default("behavioral"),
+  /** A draft answer (STAR for behavioral) grounded in the candidate's profile. */
+  answer: z.string().default(""),
+});
+export type InterviewQA = z.infer<typeof InterviewQASchema>;
+
+export const InterviewPrepSchema = z.object({
+  items: z.array(InterviewQASchema).default([]),
+});
+export type InterviewPrep = z.infer<typeof InterviewPrepSchema>;
+
 /** The supported one-shot text artifacts. */
 export type LetterKind = "coverLetter" | "recruiterEmail" | "referralNote";

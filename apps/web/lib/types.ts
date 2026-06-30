@@ -15,6 +15,8 @@ export type {
   DroppedItem,
   ReferralQA,
   ReferralQAItem,
+  InterviewPrep,
+  InterviewQA,
   LetterKind,
   AppData,
   ApplicationRecord,

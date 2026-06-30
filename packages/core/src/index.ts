@@ -27,6 +27,7 @@ export {
   type LetterInput,
   type ReferralQAInput,
 } from "./tailor/letters";
+export { writeInterviewPrep, type InterviewPrepInput } from "./tailor/interview";
 
 // Utilities
 export { clamp, compact, compactProfile } from "./util/object";
