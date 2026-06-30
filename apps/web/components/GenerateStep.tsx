@@ -238,6 +238,28 @@ export function GenerateStep({
   function moveProject(i: number, dir: -1 | 1) {
     setCurated((c) => (c ? { ...c, projects: move(c.projects, i, dir) } : c));
   }
+  function reorder<T>(arr: T[], from: number, to: number): T[] {
+    if (from === to || from < 0 || to < 0 || from >= arr.length || to >= arr.length) return arr;
+    const next = arr.slice();
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    return next;
+  }
+  function reorderWork(from: number, to: number) {
+    setCurated((c) => (c ? { ...c, work: reorder(c.work, from, to) } : c));
+  }
+  function reorderProject(from: number, to: number) {
+    setCurated((c) => (c ? { ...c, projects: reorder(c.projects, from, to) } : c));
+  }
+  // Re-add an AI-dropped item, using its ORIGINAL (un-curated) content.
+  function addBackWork(title: string) {
+    const item = profile.work.find((w) => titleMatches(title, w.position, w.name));
+    if (item) setCurated((c) => (c ? { ...c, work: [...c.work, item] } : c));
+  }
+  function addBackProject(title: string) {
+    const item = profile.projects.find((p) => titleMatches(title, p.name));
+    if (item) setCurated((c) => (c ? { ...c, projects: [...c.projects, item] } : c));
+  }
 
   return (
     <div className="space-y-6">
@@ -311,6 +333,10 @@ export function GenerateStep({
               onDropProject={dropProject}
               onMoveWork={moveWork}
               onMoveProject={moveProject}
+              onReorderWork={reorderWork}
+              onReorderProject={reorderProject}
+              onAddWork={addBackWork}
+              onAddProject={addBackProject}
             />
 
             <div className="flex flex-wrap items-center gap-2">
@@ -480,6 +506,17 @@ export function GenerateStep({
   );
 }
 
+function titleMatches(title: string, ...fields: (string | undefined)[]): boolean {
+  const t = (title || "").toLowerCase().trim();
+  if (!t) return false;
+  return fields
+    .filter(Boolean)
+    .some((f) => {
+      const x = (f as string).toLowerCase().trim();
+      return x.length > 1 && (t.includes(x) || x.includes(t));
+    });
+}
+
 function CurationEditor({
   profile,
   dropped,
@@ -487,6 +524,10 @@ function CurationEditor({
   onDropProject,
   onMoveWork,
   onMoveProject,
+  onReorderWork,
+  onReorderProject,
+  onAddWork,
+  onAddProject,
 }: {
   profile: Profile;
   dropped: DroppedItem[];
@@ -494,7 +535,19 @@ function CurationEditor({
   onDropProject: (i: number) => void;
   onMoveWork: (i: number, dir: -1 | 1) => void;
   onMoveProject: (i: number, dir: -1 | 1) => void;
+  onReorderWork: (from: number, to: number) => void;
+  onReorderProject: (from: number, to: number) => void;
+  onAddWork: (title: string) => void;
+  onAddProject: (title: string) => void;
 }) {
+  // A dropped item is still "dropped" only if it's not currently in the resume
+  // (so re-adding it removes it from this list).
+  const stillDropped = dropped.filter((d) =>
+    d.kind === "work"
+      ? !profile.work.some((w) => titleMatches(d.title, w.position, w.name))
+      : !profile.projects.some((p) => titleMatches(d.title, p.name)),
+  );
+
   return (
     <div className="space-y-4">
       {profile.basics.summary ? (
@@ -508,22 +561,36 @@ function CurationEditor({
         labels={profile.work.map((w) => [w.position, w.name].filter(Boolean).join(" · ") || "Untitled")}
         onMove={onMoveWork}
         onDrop={onDropWork}
+        onReorder={onReorderWork}
       />
       <ReorderList
         title="Projects — resume order"
         labels={profile.projects.map((p) => p.name || "Untitled")}
         onMove={onMoveProject}
         onDrop={onDropProject}
+        onReorder={onReorderProject}
       />
 
-      {dropped.length ? (
+      {stillDropped.length ? (
         <div>
-          <div className="label">Dropped for this role</div>
-          <ul className="space-y-1 text-sm text-slate-400">
-            {dropped.map((d, i) => (
-              <li key={i}>
-                <span className="text-slate-300">{d.title}</span>
-                {d.reason ? ` — ${d.reason}` : ""}
+          <div className="label">Dropped for this role — add back if you disagree</div>
+          <ul className="space-y-1">
+            {stillDropped.map((d, i) => (
+              <li
+                key={i}
+                className="flex items-center gap-2 rounded-lg border border-dashed border-white/10 px-3 py-1.5 text-sm"
+              >
+                <span className="flex-1 truncate text-slate-400">
+                  <span className="text-slate-300">{d.title}</span>
+                  {d.reason ? ` — ${d.reason}` : ""}
+                </span>
+                <button
+                  type="button"
+                  className="btn-ghost px-2 py-0.5 text-xs"
+                  onClick={() => (d.kind === "work" ? onAddWork(d.title) : onAddProject(d.title))}
+                >
+                  + Add back
+                </button>
               </li>
             ))}
           </ul>
@@ -531,8 +598,8 @@ function CurationEditor({
       ) : null}
 
       <p className="text-xs text-slate-500">
-        Reorder / remove items above to control what the recruiter sees first — the PDF
-        updates instantly (no AI call). Download for the full formatted, ATS-safe resume.
+        Drag (or ↑/↓) to reorder, ✕ to remove, “Add back” to re-include — the PDF updates
+        instantly (no AI call). Download for the full formatted, ATS-safe resume.
       </p>
     </div>
   );
@@ -543,11 +610,13 @@ function ReorderList({
   labels,
   onMove,
   onDrop,
+  onReorder,
 }: {
   title: string;
   labels: string[];
   onMove: (i: number, dir: -1 | 1) => void;
   onDrop: (i: number) => void;
+  onReorder: (from: number, to: number) => void;
 }) {
   if (!labels.length) return null;
   return (
@@ -557,8 +626,19 @@ function ReorderList({
         {labels.map((label, i) => (
           <li
             key={i}
-            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-1.5 text-sm"
+            draggable
+            onDragStart={(e) => e.dataTransfer.setData("text/plain", String(i))}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              const from = Number(e.dataTransfer.getData("text/plain"));
+              if (!Number.isNaN(from)) onReorder(from, i);
+            }}
+            className="flex cursor-grab items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-1.5 text-sm active:cursor-grabbing"
           >
+            <span className="select-none text-slate-600" title="Drag to reorder">
+              ⠿
+            </span>
             <span className="flex-1 truncate text-slate-200">{label}</span>
             <button
               type="button"
