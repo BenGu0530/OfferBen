@@ -18,6 +18,7 @@ export {
   type PublicationLite,
   type ResearchTaste,
 } from "./people/research";
+export { writePersonOutreach, type OutreachKind, type PersonOutreachInput } from "./people/outreach";
 export { scoreMatch, type ScoreMatchInput } from "./match/score";
 export { tailorResume, type TailorResumeInput } from "./tailor/resume";
 export {

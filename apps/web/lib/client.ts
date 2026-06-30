@@ -5,6 +5,7 @@ import type {
   AuthorDossier,
   Job,
   MatchResult,
+  OutreachKind,
   ParsedJob,
   Profile,
   ReferralQA,
@@ -59,6 +60,13 @@ export const api = {
       "/api/people/dossier",
       input,
     ),
+
+  outreach: (input: {
+    profile: Profile;
+    person: AuthorDossier;
+    taste?: ResearchTaste | null;
+    kind: OutreachKind;
+  }) => postJSON<{ text: string }>("/api/people/outreach", input),
 };
 
 /** Read a File as base64 (without the data: prefix). */

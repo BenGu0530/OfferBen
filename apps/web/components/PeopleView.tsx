@@ -2,10 +2,16 @@
 
 import { useState } from "react";
 import { api } from "@/lib/client";
-import type { AuthorCandidate, AuthorDossier, ResearchTaste } from "@/lib/types";
+import type {
+  AuthorCandidate,
+  AuthorDossier,
+  OutreachKind,
+  Profile,
+  ResearchTaste,
+} from "@/lib/types";
 import { Chip, CopyButton, ErrorBanner, SectionTitle, Spinner } from "./ui";
 
-export function PeopleView() {
+export function PeopleView({ profile }: { profile: Profile | null }) {
   const [name, setName] = useState("");
   const [institution, setInstitution] = useState("");
   const [candidates, setCandidates] = useState<AuthorCandidate[] | null>(null);
@@ -121,7 +127,9 @@ export function PeopleView() {
         </div>
       ) : null}
 
-      {dossier ? <Dossier dossier={dossier} taste={taste} tasteNote={tasteNote} /> : null}
+      {dossier ? (
+        <Dossier dossier={dossier} taste={taste} tasteNote={tasteNote} profile={profile} />
+      ) : null}
     </div>
   );
 }
@@ -130,10 +138,12 @@ function Dossier({
   dossier,
   taste,
   tasteNote,
+  profile,
 }: {
   dossier: AuthorDossier;
   taste: ResearchTaste | null;
   tasteNote: string | null;
+  profile: Profile | null;
 }) {
   return (
     <div className="space-y-4">
@@ -191,6 +201,8 @@ function Dossier({
         <div className="card p-5 text-sm text-slate-400">{tasteNote}</div>
       ) : null}
 
+      <OutreachPanel dossier={dossier} taste={taste} profile={profile} />
+
       <div className="card p-5">
         <div className="label mb-2">Selected publications</div>
         <ul className="space-y-2 text-sm">
@@ -205,6 +217,76 @@ function Dossier({
           ))}
         </ul>
       </div>
+    </div>
+  );
+}
+
+const OUTREACH_KINDS: { key: OutreachKind; label: string; hint: string }[] = [
+  { key: "research", label: "Research interest", hint: "PhD / collaboration opener" },
+  { key: "referral", label: "Referral / role", hint: "ask for a chat or referral" },
+];
+
+function OutreachPanel({
+  dossier,
+  taste,
+  profile,
+}: {
+  dossier: AuthorDossier;
+  taste: ResearchTaste | null;
+  profile: Profile | null;
+}) {
+  const [kind, setKind] = useState<OutreachKind>("research");
+  const [text, setText] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function draft() {
+    if (!profile) {
+      setError("Build your profile first (Profile step) so the message can reference your background.");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const { text: t } = await api.outreach({ profile, person: dossier, taste, kind });
+      setText(t);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't draft outreach.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="card p-5">
+      <SectionTitle hint="Grounded in their real work — not a generic template">
+        Draft outreach to {dossier.name.split(" ")[0] || "them"}
+      </SectionTitle>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {OUTREACH_KINDS.map((k) => (
+          <button
+            key={k.key}
+            type="button"
+            title={k.hint}
+            className={kind === k.key ? "btn-primary px-3 py-1 text-xs" : "btn-ghost px-3 py-1 text-xs"}
+            onClick={() => setKind(k.key)}
+          >
+            {k.label}
+          </button>
+        ))}
+        <button type="button" className="btn-primary px-3 py-1 text-xs" disabled={loading} onClick={draft}>
+          {loading ? <Spinner /> : null} {text ? "Redraft" : "Draft"}
+        </button>
+      </div>
+      {error ? <ErrorBanner message={error} /> : null}
+      {text ? (
+        <div className="space-y-2">
+          <div className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-slate-900/50 p-3 text-sm text-slate-200 scroll-thin">
+            {text}
+          </div>
+          <CopyButton text={text} />
+        </div>
+      ) : null}
     </div>
   );
 }

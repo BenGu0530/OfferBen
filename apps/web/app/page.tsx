@@ -134,7 +134,7 @@ export default function HomePage() {
       {view === "tracker" ? (
         <ApplicationsView applications={applications} onChange={setApplications} />
       ) : view === "people" ? (
-        <PeopleView />
+        <PeopleView profile={profile} />
       ) : (
       <>
       <div className="mb-6">

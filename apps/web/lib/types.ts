@@ -24,6 +24,7 @@ export type {
   Affiliation,
   PublicationLite,
   ResearchTaste,
+  OutreachKind,
 } from "@offerben/core";
 
 // Local copy of the status list (a runtime value). Defined here rather than

@@ -168,6 +168,10 @@ Supabase (optional).
         from real publications instead.
       - Caveat: OpenAlex author disambiguation can be noisy (the `affiliations`
         list especially); publications are the most reliable signal.
+- [x] **Research → outreach** (#5): from a researched person's dossier + taste,
+      generate a short, specific outreach message (research-interest opener or
+      referral ask) grounded in one of their real papers + the user's background.
+      The compliant, academic-leaning differentiator; foundation for #17.
 
 ### Persistence / accounts (when needed)
 - [ ] Wire Supabase Auth + the existing RLS schema for cloud sync across devices.
