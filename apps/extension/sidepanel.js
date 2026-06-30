@@ -17,6 +17,7 @@ const els = {
   resync: document.getElementById("resync"),
   appUrl: document.getElementById("app-url"),
   scoreBtn: document.getElementById("score-btn"),
+  importLi: document.getElementById("import-li"),
   autoScore: document.getElementById("autoscore"),
 };
 
@@ -89,6 +90,7 @@ function renderMatch(match) {
     }),
   );
   toggleScoreBtn(false);
+  toggleImportBtn(false);
   show("result");
 }
 
@@ -102,6 +104,57 @@ async function getActiveTab() {
 // The OfferBen web app is not a job posting — never score our own pages.
 function isOwnApp(url) {
   return Boolean(url) && url.startsWith(appUrl.replace(/\/+$/, ""));
+}
+
+function isLinkedInProfile(url) {
+  return /:\/\/(www\.)?linkedin\.com\/in\//.test(url || "");
+}
+
+function toggleImportBtn(showIt) {
+  if (els.importLi) els.importLi.classList.toggle("hidden", !showIt);
+}
+
+// Injected into the page: read the visible profile text. Compliant — it reads
+// the page the user opened and is viewing (their own profile), nothing more.
+function readProfileTextInPage() {
+  const main = document.querySelector("main");
+  const text = (main || document.body).innerText || "";
+  return text.replace(/\n{3,}/g, "\n\n").trim().slice(0, 24000);
+}
+
+// Import the LinkedIn profile the user is viewing -> structured profile, via the
+// existing /api/profile/extract. Saves it as the extension's active profile
+// (used by scoring + autofill).
+async function importLinkedIn() {
+  try {
+    const tab = await getActiveTab();
+    if (!tab || !tab.id || !isLinkedInProfile(tab.url)) return;
+    setStatus("Reading your LinkedIn profile…");
+    toggleImportBtn(false);
+    const [inj] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: readProfileTextInPage,
+    });
+    const text = (inj && inj.result) || "";
+    if (text.length < 200) throw new Error("Couldn't read the profile. Scroll to load it, then retry.");
+
+    setStatus("Extracting your profile…");
+    const res = await fetch(`${appUrl.replace(/\/+$/, "")}/api/profile/extract`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.profile) throw new Error(data.error || `Extract failed (${res.status}).`);
+
+    await chrome.storage.local.set({ profile: data.profile, profileSyncedAt: Date.now() });
+    const b = data.profile.basics || {};
+    const n = (data.profile.work || []).length;
+    setStatus(`✓ Imported ${b.name || "your profile"} (${n} role${n === 1 ? "" : "s"}). It's now your scoring profile.`);
+  } catch (err) {
+    setStatus(err && err.message ? err.message : "Import failed.", true);
+    toggleImportBtn(true);
+  }
 }
 
 // Read the JD off the current page (silent: no error flash while just browsing).
@@ -151,12 +204,19 @@ async function readJob({ silent = false, allowVision = false } = {}) {
 async function run({ silent = false, force = false } = {}) {
   try {
     toggleScoreBtn(false);
+    toggleImportBtn(false);
     const tab = await getActiveTab();
     const url = tab?.url || "";
 
     if (isOwnApp(url)) {
       setJobLine(null);
       setStatus("You're in the OfferBen app. Open a job posting in another tab to score it.");
+      return;
+    }
+    if (isLinkedInProfile(url)) {
+      setJobLine(null);
+      setStatus("On a LinkedIn profile. Import it to build your OfferBen profile.");
+      toggleImportBtn(true);
       return;
     }
 
@@ -374,16 +434,22 @@ async function doConnect() {
 async function previewJob() {
   const tab = await getActiveTab();
   const url = tab?.url || "";
+  toggleScoreBtn(false);
+  toggleImportBtn(false);
   if (!tab || !tab.id || /^(chrome|edge|about|chrome-extension):/.test(url)) {
     setJobLine(null);
     setStatus("Open a job posting, then click Score.");
-    toggleScoreBtn(false);
     return;
   }
   if (isOwnApp(url)) {
     setJobLine(null);
     setStatus("You're in the OfferBen app. Open a job posting in another tab to score it.");
-    toggleScoreBtn(false);
+    return;
+  }
+  if (isLinkedInProfile(url)) {
+    setJobLine(null);
+    setStatus("On a LinkedIn profile. Import it to build your OfferBen profile.");
+    toggleImportBtn(true);
     return;
   }
   if (matchCache[url]) {
@@ -435,6 +501,7 @@ async function init() {
 
   els.reread.addEventListener("click", () => run({ force: true }));
   els.scoreBtn.addEventListener("click", () => run({ force: true }));
+  els.importLi.addEventListener("click", importLinkedIn);
   els.open.addEventListener("click", tailorInOfferBen);
   document.getElementById("autofill").addEventListener("click", autofill);
   els.connectBtn.addEventListener("click", doConnect);

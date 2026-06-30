@@ -109,6 +109,11 @@ Supabase (optional).
 - [x] MV3 manifest + popup UI (capture, edit, send).
 - [x] JD extraction adapters: Greenhouse, Lever, Ashby, Workday + generic fallback.
 - [x] "Open in OfferBen" handoff (key stays server-side).
+- [x] **One-click LinkedIn self-import** (#20): on the user's own
+      `linkedin.com/in/...` page, the panel reads the visible profile text and runs
+      it through `/api/profile/extract` → saves it as the extension's profile
+      (used by scoring + autofill). Compliant: user-initiated, single page, their
+      own profile — no scraping/automation.
 - [x] **Side Panel UI** (v0.2): docks next to the live job page, reads it, and
       scores it. Chrome/Edge 114+. Reuses the `extract.js` adapters; popup legacy.
       - **Scoring is manual by default** ("⚡ Score this job" button) — an
@@ -184,7 +189,7 @@ Supabase (optional).
 | Capability | Offer Max | OfferBen now | Plan |
 |---|---|---|---|
 | Upload resume / paste text | ✅ | ✅ | — |
-| One-click read LinkedIn profile | ✅ (extension) | ❌ | Phase 2 |
+| One-click read LinkedIn profile | ✅ (extension) | ✅ (extension self-import) | — |
 | JD capture from career pages | ✅ | 🟡 (extension built, not yet load-tested by user) | Phase 2 |
 | Match scoring | ✅ | ✅ | — |
 | Tailored resume + letters | ✅ | ✅ | — |
