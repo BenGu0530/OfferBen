@@ -117,6 +117,13 @@ function isLinkedInProfile(url) {
   return /:\/\/(www\.)?linkedin\.com\/in\//.test(url || "");
 }
 
+// Pages the extension can't inject into (no host permission / restricted).
+function isUninjectable(url) {
+  return /^(chrome|edge|about|chrome-extension|file|data|view-source|devtools|chrome-untrusted):/.test(
+    url || "",
+  );
+}
+
 function toggleImportBtn(showIt) {
   if (els.importLi) els.importLi.classList.toggle("hidden", !showIt);
 }
@@ -169,15 +176,22 @@ async function importLinkedIn() {
 // Gated to explicit actions (open / ⟳) so silent navigations don't burn quota.
 async function readJob({ silent = false, allowVision = false } = {}) {
   const tab = await getActiveTab();
-  if (!tab || !tab.id || /^(chrome|edge|about|chrome-extension):/.test(tab.url || "")) {
-    if (!silent) setStatus("Open a job posting — I'll score it automatically.");
+  if (!tab || !tab.id || isUninjectable(tab.url)) {
+    if (!silent) setStatus("Open a job posting in your browser — I can't read this page.");
     return null;
   }
   lastUrl = tab.url;
-  const [injection] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    files: ["extract.js"],
-  });
+  let injection;
+  try {
+    [injection] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["extract.js"],
+    });
+  } catch (e) {
+    // Page the extension can't access (local file, PDF viewer, store page, …).
+    if (!silent) setStatus("Can't read this page. Open a normal job posting URL.", true);
+    return null;
+  }
   const job = injection && injection.result;
   if (job && job.description && job.description.length >= 80) return job;
 
@@ -560,11 +574,12 @@ async function doConnect() {
 // score until the user clicks (or auto-score is on). Renders a cached score if
 // we already scored this URL.
 async function previewJob() {
+  try {
   const tab = await getActiveTab();
   const url = tab?.url || "";
   toggleScoreBtn(false);
   toggleImportBtn(false);
-  if (!tab || !tab.id || /^(chrome|edge|about|chrome-extension):/.test(url)) {
+  if (!tab || !tab.id || isUninjectable(url)) {
     setJobLine(null);
     setStatus("Open a job posting, then click Score.");
     return;
@@ -601,6 +616,9 @@ async function previewJob() {
   }
   setStatus(job ? "Ready — click Score to rate this job." : "No job detected here. Open a posting, then Score.");
   toggleScoreBtn(true);
+  } catch (err) {
+    setStatus("Open a job posting, then click Score.");
+  }
 }
 
 function toggleScoreBtn(showIt) {
