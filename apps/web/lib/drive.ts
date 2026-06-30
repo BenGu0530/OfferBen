@@ -108,6 +108,11 @@ async function getToken(): Promise<string> {
   });
 }
 
+/** Acquire a drive.file token (prompts sign-in once). Exposed for the Picker. */
+export async function getDriveToken(): Promise<string> {
+  return getToken();
+}
+
 // --- Drive REST ------------------------------------------------------------
 
 async function findFileId(auth: { Authorization: string }): Promise<string | null> {

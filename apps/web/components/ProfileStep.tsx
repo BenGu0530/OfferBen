@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { api, fileToBase64 } from "@/lib/client";
+import { pickResumeFromDrive, pickerEnabled } from "@/lib/drivePicker";
 import type { Profile } from "@/lib/types";
 import { Chip, ErrorBanner, SectionTitle, Spinner } from "./ui";
 
@@ -52,6 +53,25 @@ export function ProfileStep({
     }
   }
 
+  async function importFromDrive() {
+    setError(null);
+    setLoading(true);
+    try {
+      const f = await pickResumeFromDrive();
+      if (!f) return; // cancelled
+      const payload =
+        f.mimeType === "application/pdf"
+          ? { fileBase64: f.base64, mimeType: "application/pdf" }
+          : { text: atob(f.base64) };
+      const { profile: p } = await api.extractProfile(payload);
+      onChange(p);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Drive import failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="card p-5">
@@ -85,6 +105,16 @@ export function ProfileStep({
             <p className="mt-1 text-xs text-slate-500">
               Resume PDF, or LinkedIn “Download your data” export.
             </p>
+            {pickerEnabled() ? (
+              <button
+                type="button"
+                className="btn-ghost mt-2 w-full justify-start text-sm"
+                onClick={importFromDrive}
+                disabled={loading}
+              >
+                ⬇ Import from Google Drive
+              </button>
+            ) : null}
           </div>
 
           <div>
