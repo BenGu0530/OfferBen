@@ -141,11 +141,14 @@ Supabase (optional).
       → `/api/capture` → vision model (`extractJobFromImage`). Gated to explicit
       open/⟳ so silent navigations don't burn quota. A robustness fallback, *not*
       a scraping shortcut (user-initiated, single-page).
-- [~] **Autofill application forms** — v2: fills contact + website + current
+- [x] **Autofill application forms** (#6, #18): fills contact + website + current
       company/title + school/degree/field + city/state/country across inputs,
-      textareas, and `<select>`s; deliberately SKIPS sensitive fields (work auth,
-      sponsorship, EEO, salary) and reports how many it left for the human.
-      Next: per-ATS field-mapping registry for tricky layouts (Workday, Ashby).
+      textareas, `<select>`s, and radio groups. Richer detection
+      (`data-automation-id` etc.) for Workday/Ashby. Sensitive fields (work auth /
+      sponsorship / EEO) are answered ONLY from the user's opt-in stored answers
+      (Settings); demographics never guessed; salary/DOB/SSN always skipped.
+- [x] **Inline generation in the side panel** (#7): write a cover letter /
+      recruiter email / referral note in-panel after scoring, no app round-trip.
 - [ ] Extract this into a `packages/ats-adapters` package shared by capture + autofill.
 - [ ] Inline match score badge on the job page (no need to open the app).
 - [ ] One-click read of the user's own LinkedIn profile (in their logged-in browser).
@@ -168,7 +171,8 @@ Supabase (optional).
       "fill + 1-click confirm".
 
 ### Phase 4 — Bonus
-- [ ] Interview prep: predicted behavioral/technical questions + STAR draft answers.
+- [x] Interview prep (#15): predicted behavioral/technical questions + STAR draft
+      answers grounded in the profile; a card in the Generate step.
 - [x] **Research HR / tech leads** ("Research" view): name + institution → OpenAlex
       author lookup (disambiguated by institution) → schools/labs/affiliations,
       publications, and an LLM-inferred **research taste + outreach talking points**.
