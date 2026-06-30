@@ -4,7 +4,7 @@ import {
   ProfileSchema,
   scoreMatch,
 } from "@offerben/core";
-import { jsonHandler } from "@/lib/server";
+import { aiConfigFromHeaders, jsonHandler } from "@/lib/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,13 +15,13 @@ interface Body {
   job: unknown;
 }
 
-export const POST = jsonHandler<Body>(async (body) => {
+export const POST = jsonHandler<Body>(async (body, req) => {
   const profile = ProfileSchema.parse(body.profile ?? {});
   const job = JobSchema.parse(body.job ?? {});
   if (!job.description.trim()) {
     throw new Error("Add a job description first.");
   }
-  const ai = createAIProvider();
+  const ai = createAIProvider(aiConfigFromHeaders(req));
   // Single AI call (was 2: parseJob + scoreMatch). The match result already
   // surfaces matched/missing keywords, so we synthesize a lightweight ParsedJob
   // from it for the downstream tailor step instead of spending a 2nd request —

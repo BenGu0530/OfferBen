@@ -1,6 +1,6 @@
 import { createAIProvider, ProfileSchema, writePersonOutreach } from "@offerben/core";
 import type { AuthorDossier, OutreachKind, ResearchTaste } from "@offerben/core";
-import { jsonHandler } from "@/lib/server";
+import { aiConfigFromHeaders, jsonHandler } from "@/lib/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,10 +13,10 @@ interface Body {
   kind?: OutreachKind;
 }
 
-export const POST = jsonHandler<Body>(async (body) => {
+export const POST = jsonHandler<Body>(async (body, req) => {
   if (!body.person?.name) throw new Error("Pick a researched person first.");
   const profile = ProfileSchema.parse(body.profile ?? {});
-  const ai = createAIProvider();
+  const ai = createAIProvider(aiConfigFromHeaders(req));
   const text = await writePersonOutreach(ai, {
     profile,
     person: body.person,

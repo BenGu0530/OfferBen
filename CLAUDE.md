@@ -49,10 +49,13 @@ unpacked at `chrome://extensions` (Developer mode). See `apps/extension/README.m
 
 ## Critical invariants — don't break these
 
-1. **Secrets stay server-side.** The AI key (`GEMINI_API_KEY` / `AI_API_KEY`) is
-   read ONLY in `apps/web/app/api/**` route handlers via `createAIProvider()`.
-   Never expose it to the client or the extension. The extension calls the web
-   API; it never holds a key.
+1. **Secrets stay server-side — except the user's own BYOK key.** The DEV/server
+   env key (`GEMINI_API_KEY` / `AI_API_KEY`) is read ONLY in `apps/web/app/api/**`
+   via `createAIProvider()` and never shipped to the client. A USER's own BYOK key
+   is different: it lives in *their* browser (localStorage `offerben.ai.v1`), is
+   sent per-request as `x-offerben-*` headers, used for that one call, and NEVER
+   persisted or logged server-side (`aiConfigFromHeaders` → `createAIProvider(cfg)`,
+   falling back to env). Don't log these headers.
 2. **Client imports types-only from core.** `apps/web/lib/types.ts` re-exports
    core types with `export type`. Importing a core *runtime value* into a client
    component pulls the Gemini SDK into the browser bundle. If you need a runtime

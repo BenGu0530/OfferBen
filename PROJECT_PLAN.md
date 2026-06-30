@@ -104,6 +104,12 @@ Supabase (optional).
       ("📄 Drive"). Chosen over inlining in one JSON so each application is a file
       the user can browse/open/share — lower-barrier + open-source friendly.
 - [x] Editable profile: fix name/headline/email/phone/skills after AI extraction.
+- [x] **BYOK + AI settings** (#3, #21): a Settings view lets each user bring their
+      own provider/key/model (Gemini or any OpenAI-compatible). Key stays in the
+      browser, sent per-request via `x-offerben-*` headers, used once, never
+      persisted server-side; falls back to the env key for self-hosters. The header
+      chip shows the active backend ("Server key" / "BYOK · <model>"). This makes
+      "true BYOK / local-first" an architectural fact, not marketing.
 
 ### Phase 2 — Extension (partial)
 - [x] MV3 manifest + popup UI (capture, edit, send).

@@ -8,41 +8,49 @@ export { OpenAICompatibleProvider } from "./openai";
 export { extractJson } from "./json";
 export { withRetry, isTransient } from "./retry";
 
+/** Per-request AI config (BYOK). Any field overrides the corresponding env var. */
+export interface AIConfig {
+  provider?: string;
+  apiKey?: string;
+  model?: string;
+  baseURL?: string;
+}
+
 /**
- * Build the configured AI provider from environment variables. Call this only
- * on the server — it reads secret env vars.
+ * Build the AI provider. Call this only on the server.
  *
- * Pick a backend with AI_PROVIDER (default "gemini"):
+ * BYOK ("bring your own key"): each user can supply their own provider/key/model
+ * (passed per-request, stored only in their browser, never persisted server-side).
+ * Anything not provided falls back to env vars, so a self-hoster can just set
+ * GEMINI_API_KEY (or AI_*) and skip the UI entirely.
  *
- *   AI_PROVIDER=gemini   GEMINI_API_KEY=...  [GEMINI_MODEL=gemini-2.5-flash]
- *
- *   AI_PROVIDER=openai   AI_API_KEY=...  AI_MODEL=...  [AI_BASE_URL=...]
- *     └─ works with OpenAI, Groq, OpenRouter, DeepSeek, Ollama, or your own
- *        fine-tuned model behind any OpenAI-compatible server. Swapping models
- *        is an env change — never a code change.
+ *   provider "gemini"  -> apiKey + (model)            | env: GEMINI_API_KEY, GEMINI_MODEL
+ *   provider "openai"  -> apiKey + model + (baseURL)  | env: AI_API_KEY, AI_MODEL, AI_BASE_URL
+ *     └─ "openai" covers OpenAI, Groq, OpenRouter, DeepSeek, Ollama, or your own
+ *        fine-tuned model behind any OpenAI-compatible server.
  */
-export function createAIProvider(): AIProvider {
-  const provider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+export function createAIProvider(cfg: AIConfig = {}): AIProvider {
+  const provider = (cfg.provider || process.env.AI_PROVIDER || "gemini").toLowerCase();
 
   if (provider === "openai" || provider === "openai-compatible") {
-    const apiKey = process.env.AI_API_KEY;
-    const model = process.env.AI_MODEL;
+    const apiKey = cfg.apiKey || process.env.AI_API_KEY;
+    const model = cfg.model || process.env.AI_MODEL;
     if (!apiKey) {
-      throw new Error("AI_API_KEY is not set. Add it to apps/web/.env.local (see .env.example).");
+      throw new Error("No API key. Add one in Settings (BYOK) or set AI_API_KEY in apps/web/.env.local.");
     }
     if (!model) {
-      throw new Error("AI_MODEL is not set (e.g. gpt-4o-mini, llama-3.3-70b-versatile). See .env.example.");
+      throw new Error("No model set. Pick one in Settings (e.g. llama-3.3-70b-versatile) or set AI_MODEL.");
     }
-    return new OpenAICompatibleProvider({ apiKey, model, baseURL: process.env.AI_BASE_URL });
+    return new OpenAICompatibleProvider({ apiKey, model, baseURL: cfg.baseURL || process.env.AI_BASE_URL });
   }
 
   // Default: Gemini.
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = cfg.apiKey || process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error(
-      "GEMINI_API_KEY is not set. Add it to apps/web/.env.local (see .env.example).",
+      "No Gemini API key. Add one in Settings (BYOK) or set GEMINI_API_KEY in apps/web/.env.local.",
     );
   }
-  const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
+  const model = cfg.model || process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
   return new GeminiProvider(apiKey, model);
 }

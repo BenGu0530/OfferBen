@@ -8,7 +8,9 @@ import { GenerateStep } from "@/components/GenerateStep";
 import { JobStep } from "@/components/JobStep";
 import { MatchStep } from "@/components/MatchStep";
 import { ProfileStep } from "@/components/ProfileStep";
+import { SettingsView } from "@/components/SettingsView";
 import { Stepper, type StepDef } from "@/components/Stepper";
+import { activeModelLabel } from "@/lib/aiSettings";
 import { readJobFromUrl } from "@/lib/handoff";
 import { storage } from "@/lib/storage";
 import type { ApplicationRecord, Job, MatchResult, ParsedJob, Profile } from "@/lib/types";
@@ -24,7 +26,8 @@ const EMPTY_JOB: Job = { title: "", company: "", description: "" };
 
 export default function HomePage() {
   const [step, setStep] = useState(0);
-  const [view, setView] = useState<"wizard" | "tracker" | "people">("wizard");
+  const [view, setView] = useState<"wizard" | "tracker" | "people" | "settings">("wizard");
+  const [aiLabel, setAiLabel] = useState("Server key");
   const [profile, setProfileState] = useState<Profile | null>(null);
   const [job, setJobState] = useState<Job>(EMPTY_JOB);
   const [parsed, setParsed] = useState<ParsedJob | null>(null);
@@ -37,6 +40,7 @@ export default function HomePage() {
     const p = storage.loadProfile();
     if (p) setProfileState(p);
     setApplications(storage.loadApplications());
+    setAiLabel(activeModelLabel());
 
     void (async () => {
       const incoming = await readJobFromUrl();
@@ -124,9 +128,14 @@ export default function HomePage() {
                 setStep(0);
               }}
             />
-            <span className="chip hidden border-white/10 bg-white/5 text-slate-300 sm:inline-flex">
-              Local · Gemini
-            </span>
+            <button
+              type="button"
+              className="chip border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+              onClick={() => setView("settings")}
+              title="AI settings (bring your own key)"
+            >
+              {aiLabel}
+            </button>
           </div>
         </div>
       </header>
@@ -135,6 +144,8 @@ export default function HomePage() {
         <ApplicationsView applications={applications} onChange={setApplications} />
       ) : view === "people" ? (
         <PeopleView profile={profile} />
+      ) : view === "settings" ? (
+        <SettingsView onSaved={() => setAiLabel(activeModelLabel())} />
       ) : (
       <>
       <div className="mb-6">

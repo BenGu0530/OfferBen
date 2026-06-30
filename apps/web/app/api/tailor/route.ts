@@ -5,7 +5,7 @@ import {
   tailorResume,
 } from "@offerben/core";
 import type { MatchResult, ParsedJob } from "@offerben/core";
-import { jsonHandler } from "@/lib/server";
+import { aiConfigFromHeaders, jsonHandler } from "@/lib/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,10 +19,10 @@ interface Body {
   pageTarget?: 1 | 2;
 }
 
-export const POST = jsonHandler<Body>(async (body) => {
+export const POST = jsonHandler<Body>(async (body, req) => {
   const profile = ProfileSchema.parse(body.profile ?? {});
   const job = JobSchema.parse(body.job ?? {});
-  const ai = createAIProvider();
+  const ai = createAIProvider(aiConfigFromHeaders(req));
   const resume = await tailorResume(ai, {
     profile,
     job,

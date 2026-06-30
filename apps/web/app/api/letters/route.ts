@@ -6,7 +6,7 @@ import {
   writeReferralQA,
 } from "@offerben/core";
 import type { LetterKind } from "@offerben/core";
-import { jsonHandler } from "@/lib/server";
+import { aiConfigFromHeaders, jsonHandler } from "@/lib/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,10 +18,10 @@ interface Body {
   kind: LetterKind | "referralQA";
 }
 
-export const POST = jsonHandler<Body>(async (body) => {
+export const POST = jsonHandler<Body>(async (body, req) => {
   const profile = ProfileSchema.parse(body.profile ?? {});
   const job = JobSchema.parse(body.job ?? {});
-  const ai = createAIProvider();
+  const ai = createAIProvider(aiConfigFromHeaders(req));
 
   if (body.kind === "referralQA") {
     const qa = await writeReferralQA(ai, { profile, job });

@@ -1,5 +1,5 @@
 import { createAIProvider, extractJobFromImage } from "@offerben/core";
-import { jsonHandler } from "@/lib/server";
+import { aiConfigFromHeaders, jsonHandler } from "@/lib/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,9 +11,9 @@ interface Body {
   mimeType?: string;
 }
 
-export const POST = jsonHandler<Body>(async (body) => {
+export const POST = jsonHandler<Body>(async (body, req) => {
   if (!body.imageBase64) throw new Error("No screenshot provided.");
-  const ai = createAIProvider();
+  const ai = createAIProvider(aiConfigFromHeaders(req));
   const job = await extractJobFromImage(ai, {
     mimeType: body.mimeType || "image/png",
     data: body.imageBase64,

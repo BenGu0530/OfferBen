@@ -1,5 +1,5 @@
 import { createAIProvider, extractProfile } from "@offerben/core";
-import { jsonHandler } from "@/lib/server";
+import { aiConfigFromHeaders, jsonHandler } from "@/lib/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,11 +11,11 @@ interface Body {
   mimeType?: string;
 }
 
-export const POST = jsonHandler<Body>(async (body) => {
+export const POST = jsonHandler<Body>(async (body, req) => {
   if (!body.text?.trim() && !body.fileBase64) {
     throw new Error("Paste your resume text or upload a file first.");
   }
-  const ai = createAIProvider();
+  const ai = createAIProvider(aiConfigFromHeaders(req));
   const profile = await extractProfile(ai, {
     text: body.text,
     file: body.fileBase64

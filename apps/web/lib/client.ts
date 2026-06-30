@@ -1,5 +1,6 @@
 "use client";
 
+import { aiHeaders } from "./aiSettings";
 import type {
   AuthorCandidate,
   AuthorDossier,
@@ -16,7 +17,7 @@ import type {
 async function postJSON<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...aiHeaders() },
     body: JSON.stringify(body),
   });
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
