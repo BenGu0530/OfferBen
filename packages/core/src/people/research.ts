@@ -97,7 +97,8 @@ export async function searchAuthors(
   }));
 }
 
-function reconstructAbstract(inv?: Record<string, number[]>): string | undefined {
+/** Rebuild abstract text from OpenAlex's inverted index (exported for tests). */
+export function reconstructAbstract(inv?: Record<string, number[]>): string | undefined {
   if (!inv) return undefined;
   const words: string[] = [];
   for (const [word, positions] of Object.entries(inv)) {

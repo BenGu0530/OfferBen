@@ -40,4 +40,4 @@ packages/db/      Supabase + RLS(可选，未接)
 
 - **免费配额很小**：Gemini 免费层约每天每模型 20 次，太平洋午夜重置。全 429 就是限流了 → 换模型或换 provider。
 - 密钥只在服务端；client 只 import 类型；Drive 只用 drive.file；不爬取；投递有人工闸门。
-- 提交前跑 `npm run typecheck`；暂无自动化测试。
+- 提交前跑 `npm run typecheck` 和 `npm test`(Vitest 覆盖 core 纯逻辑)。

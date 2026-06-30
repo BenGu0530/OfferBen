@@ -58,7 +58,8 @@ app isn't verified, that's expected in Testing mode → Advanced → continue.
 1. `git pull`, read **CLAUDE.md** + skim **PROJECT_PLAN.md**.
 2. Pick a [GitHub Issue](../../issues) (look for the `good first issue` label).
 3. Make the change. **Logic goes in `packages/core`; `apps/*` are thin shells.**
-4. `npm run typecheck` (must pass; there are no automated tests yet).
+4. `npm run typecheck` and `npm test` (both must pass). Add a unit test in
+   `packages/core/test/` when you add a pure function.
 5. When done, ask your agent to **update PROJECT_PLAN.md** (what changed + why),
    then commit. This is how the other contributor's agent stays in sync — no
    information gap, no need to read raw chat history.

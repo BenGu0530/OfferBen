@@ -192,7 +192,9 @@ Supabase (optional).
 ### Other current limitations
 - Storage is browser `localStorage` only; clearing the browser loses data
   (mitigated by Export/Import).
-- No automated tests yet.
+- Vitest unit tests cover pure core logic (`packages/core/test/`): JSON
+  extraction, retry/transient classification, object utils, schema tolerance,
+  abstract reconstruction. Run with `npm test`. (UI / API routes not yet covered.)
 - No authentication (single-user assumption).
 - Extension is plain JS and does not yet share `@offerben/core` code.
 - Free Gemini tier rate limits apply; fine for personal use, not for bulk.

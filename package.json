@@ -12,13 +12,16 @@
     "build": "npm run build -w @offerben/web",
     "start": "npm run start -w @offerben/web",
     "lint": "npm run lint -w @offerben/web",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
     "prettier": "^3.9.1",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.9"
   }
 }

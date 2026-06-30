@@ -41,6 +41,7 @@ npm install          # install all workspaces
 npm run dev          # web app at http://localhost:3000
 npm run build        # production build of the web app
 npm run typecheck    # tsc --noEmit across all workspaces — run before committing
+npm test             # Vitest (unit tests for pure core logic) — run before committing
 npm run lint         # next lint (web)
 ```
 Node 20+ (developed on Node via Homebrew). Extension: load `apps/extension`
@@ -97,7 +98,8 @@ no AI), `people/dossier` (OpenAlex + AI taste). All wrapped by `lib/server.ts`
   `AI_PROVIDER=openai` with a different backend. See `.env.example`.
 - **Vision fallback costs a call**, so it's gated to explicit open/⟳, not silent
   navigations.
-- Run `npm run typecheck` before committing; there are no automated tests yet.
+- Run `npm run typecheck` AND `npm test` before committing. Tests cover pure core
+  logic (`packages/core/test/`); add a test when you add a pure function.
 
 ## Conventions
 
