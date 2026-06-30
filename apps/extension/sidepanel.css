@@ -308,6 +308,20 @@ details summary {
   margin-top: 2px;
 }
 
+.ans {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.ans select {
+  width: auto;
+}
+
 .autofill-bar {
   margin-top: 8px;
   padding-top: 10px;

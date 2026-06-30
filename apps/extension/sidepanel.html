@@ -83,6 +83,27 @@
           <input id="autoscore" type="checkbox" />
           <span>Auto-score as I browse (uses AI on every job page)</span>
         </label>
+
+        <div class="lbl">Application answers (autofill only fills what you set)</div>
+        <label class="ans">Authorized to work?
+          <select id="ans-workauth" class="inp small">
+            <option value="">— don't fill</option>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
+        </label>
+        <label class="ans">Need visa sponsorship?
+          <select id="ans-sponsor" class="inp small">
+            <option value="">— don't fill</option>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
+        </label>
+        <label class="toggle">
+          <input id="ans-eeo" type="checkbox" />
+          <span>EEO (gender/race/veteran/disability): select “decline to self-identify”</span>
+        </label>
+
         <label class="lbl">OfferBen app URL</label>
         <input id="app-url" class="inp small" type="text" placeholder="http://localhost:3000" />
         <button id="resync" class="btn ghost small">Re-sync profile from Drive</button>

@@ -22,6 +22,9 @@ const els = {
   genStatus: document.getElementById("gen-status"),
   genOut: document.getElementById("gen-out"),
   genCopy: document.getElementById("gen-copy"),
+  ansWorkauth: document.getElementById("ans-workauth"),
+  ansSponsor: document.getElementById("ans-sponsor"),
+  ansEeo: document.getElementById("ans-eeo"),
 };
 
 let appUrl = DEFAULT_APP_URL;
@@ -298,10 +301,12 @@ function autofillValues(profile) {
   };
 }
 
-// Runs IN the page. Maps inputs/textareas/selects to known fields and fills them.
-// Deliberately SKIPS sensitive fields (work authorization, sponsorship, EEO,
-// salary) — those are left for the human, matching the review-gate principle.
-function fillFormInPage(values) {
+// Runs IN the page. Maps inputs/textareas/selects/radios to known fields.
+// Sensitive fields (work auth / sponsorship / EEO) are only answered from the
+// user's PRE-STORED answers (opt-in) — we never guess demographics. Salary / DOB
+// / SSN are always skipped. This keeps the review-gate principle intact.
+function fillFormInPage(values, answers) {
+  answers = answers || {};
   const RULES = [
     ["email", /e-?mail/i, (el) => el.type === "email"],
     ["phone", /phone|mobile|tel/i, (el) => el.type === "tel"],
@@ -321,14 +326,24 @@ function fillFormInPage(values) {
     ["address", /street|address.?line|^address$/i],
   ];
 
-  // Never auto-answer these — leave them for the user to review.
-  const SENSITIVE = /authoriz|sponsor|visa|require.?spons|work.?permit|gender|sex\b|race|ethnic|hispanic|veteran|disab|salary|compensation|expected.?pay|date.?of.?birth|ssn|social.?security/i;
+  const WORK_AUTH = /authoriz|work.?permit|eligible to work|right to work|legally.*work/i;
+  const SPONSOR = /sponsor|visa|require.?spons/i;
+  const DEMO = /gender|(^|[^a-z])sex\b|race|ethnic|hispanic|latino|veteran|disab/i;
+  const HARD_SKIP = /salary|compensation|expected.?pay|desired.?pay|date.?of.?birth|\bdob\b|ssn|social.?security/i;
+  const DECLINE = /decline|prefer not|don'?t wish|do not wish|not to (answer|disclose|identify)/i;
 
   function describe(el) {
-    const bits = [el.name, el.id, el.placeholder, el.getAttribute("aria-label"), el.autocomplete];
+    const bits = [
+      el.name,
+      el.id,
+      el.placeholder,
+      el.getAttribute("aria-label"),
+      el.autocomplete,
+      el.getAttribute("data-automation-id"), // Workday
+    ];
     if (el.labels && el.labels[0]) bits.push(el.labels[0].textContent);
-    const wrap = el.closest("label, .field, .form-group, [class*='field']");
-    if (wrap) bits.push((wrap.textContent || "").slice(0, 120));
+    const wrap = el.closest("label, .field, fieldset, [class*='field'], [role='group']");
+    if (wrap) bits.push((wrap.textContent || "").slice(0, 160));
     return bits.filter(Boolean).join(" ").toLowerCase();
   }
 
@@ -338,7 +353,6 @@ function fillFormInPage(values) {
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
   }
-
   function setSelect(el, value) {
     const want = value.toLowerCase();
     const opt = Array.from(el.options).find(
@@ -349,19 +363,92 @@ function fillFormInPage(values) {
     el.dispatchEvent(new Event("change", { bubbles: true }));
     return true;
   }
+  function selectByRegex(el, re) {
+    const opt = Array.from(el.options).find((o) => re.test(o.text));
+    if (!opt) return false;
+    el.value = opt.value;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  }
+  function radioLabel(r) {
+    const l = (r.labels && r.labels[0] && r.labels[0].textContent) || "";
+    return (l || r.value || "").toLowerCase();
+  }
+  function pickRadio(group, match) {
+    const r = group.find((x) => match(radioLabel(x)));
+    if (!r) return false;
+    r.click();
+    return true;
+  }
 
   let filled = 0;
   let skipped = 0;
-  const fields = document.querySelectorAll("input, textarea, select");
-  for (const el of fields) {
-    if (el.type === "hidden" || el.type === "password" || el.disabled) continue;
-    if (el.tagName !== "SELECT" && el.value) continue; // don't clobber what's there
-    const desc = describe(el);
-    if (!desc) continue;
-    if (SENSITIVE.test(desc)) {
+
+  // Sensitive value resolution from stored answers (opt-in).
+  function answerFor(desc) {
+    if (WORK_AUTH.test(desc)) return answers.workAuthorized || null; // "Yes"/"No"
+    if (SPONSOR.test(desc)) return answers.needsSponsorship || null;
+    if (DEMO.test(desc)) return answers.eeoDecline ? "__decline__" : null;
+    return undefined; // not sensitive
+  }
+
+  // 1) Radio groups (work auth / sponsorship / EEO are often radios).
+  const radios = Array.from(document.querySelectorAll("input[type=radio]"));
+  const groups = {};
+  for (const r of radios) (groups[r.name || r.id] = groups[r.name || r.id] || []).push(r);
+  const handledNames = new Set();
+  for (const name of Object.keys(groups)) {
+    const group = groups[name];
+    if (group.some((r) => r.checked || r.disabled)) {
+      handledNames.add(name);
+      continue;
+    }
+    const desc = describe(group[0]);
+    if (HARD_SKIP.test(desc)) {
+      handledNames.add(name);
       skipped++;
       continue;
     }
+    const ans = answerFor(desc);
+    if (ans === undefined) continue; // not sensitive; leave radios alone
+    handledNames.add(name);
+    if (!ans) {
+      skipped++;
+      continue;
+    }
+    const ok = ans === "__decline__" ? pickRadio(group, (l) => DECLINE.test(l)) : pickRadio(group, (l) => l.includes(ans.toLowerCase()));
+    ok ? filled++ : skipped++;
+  }
+
+  // 2) Inputs / textareas / selects.
+  for (const el of document.querySelectorAll("input, textarea, select")) {
+    if (el.type === "hidden" || el.type === "password" || el.type === "radio" || el.type === "checkbox" || el.disabled) continue;
+    if (el.type === "radio" && handledNames.has(el.name)) continue;
+    if (el.tagName !== "SELECT" && el.value) continue; // don't clobber what's there
+    const desc = describe(el);
+    if (!desc) continue;
+    if (HARD_SKIP.test(desc)) {
+      skipped++;
+      continue;
+    }
+    const ans = answerFor(desc);
+    if (ans !== undefined) {
+      // sensitive field
+      if (!ans) {
+        skipped++;
+        continue;
+      }
+      let ok = false;
+      if (el.tagName === "SELECT") {
+        ok = ans === "__decline__" ? selectByRegex(el, DECLINE) : setSelect(el, ans);
+      } else if (ans !== "__decline__") {
+        setInput(el, ans);
+        ok = true;
+      }
+      ok ? filled++ : skipped++;
+      continue;
+    }
+    // normal fields
     for (const [key, re, typeCheck] of RULES) {
       const value = values[key];
       if (!value) continue;
@@ -384,10 +471,11 @@ async function autofill() {
     }
     const tab = await getActiveTab();
     if (!tab || !tab.id) return;
+    const { answers } = await chrome.storage.local.get("answers");
     const [res] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: fillFormInPage,
-      args: [autofillValues(profile)],
+      args: [autofillValues(profile), answers || {}],
     });
     const { filled = 0, skipped = 0 } = (res && res.result) || {};
     if (!filled && !skipped) {
@@ -563,6 +651,24 @@ async function init() {
     chrome.storage.local.set({ autoScore });
     if (autoScore) run({ force: true });
   });
+
+  // Application answers (opt-in; autofill only fills what's set here).
+  const { answers } = await chrome.storage.local.get("answers");
+  const a = answers || {};
+  els.ansWorkauth.value = a.workAuthorized || "";
+  els.ansSponsor.value = a.needsSponsorship || "";
+  els.ansEeo.checked = Boolean(a.eeoDecline);
+  const saveAnswers = () =>
+    chrome.storage.local.set({
+      answers: {
+        workAuthorized: els.ansWorkauth.value,
+        needsSponsorship: els.ansSponsor.value,
+        eeoDecline: els.ansEeo.checked,
+      },
+    });
+  els.ansWorkauth.addEventListener("change", saveAnswers);
+  els.ansSponsor.addEventListener("change", saveAnswers);
+  els.ansEeo.addEventListener("change", saveAnswers);
 
   // Default: just detect + show the job; score on click. (Auto-score if enabled.)
   if (autoScore) await run();
