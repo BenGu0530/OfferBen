@@ -371,7 +371,7 @@ export function GenerateStep({
             />
 
             <div className="flex flex-wrap items-center gap-2">
-              <ResumeDownloadButton profile={resumeProfile} fileName={fileName} />
+              <ResumeDownloadButton profile={resumeProfile} pageTarget={pageTarget} fileName={fileName} />
               <button
                 type="button"
                 className="btn-ghost"
