@@ -48,7 +48,9 @@ export async function scoreMatch(
   ].join("\n");
 
   const result = await ai.generateJSON(
-    { system: SYSTEM, prompt, schemaHint: SCHEMA_HINT, temperature: 0.25 },
+    // temperature 0: scoring should be deterministic for the same profile+job,
+    // so the score doesn't wobble between the side panel and the web app.
+    { system: SYSTEM, prompt, schemaHint: SCHEMA_HINT, temperature: 0 },
     (raw) => MatchResultSchema.parse(raw),
   );
 

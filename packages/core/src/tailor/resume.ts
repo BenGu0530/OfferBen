@@ -73,8 +73,43 @@ export async function tailorResume(
     JSON.stringify(compactProfile(profile)),
   ].join("\n");
 
-  return ai.generateJSON(
+  const result = await ai.generateJSON(
     { system: SYSTEM, prompt, schemaHint: SCHEMA_HINT, temperature: 0.4 },
     (raw) => TailoredResumeSchema.parse(raw),
   );
+
+  // The model can't measure rendered page length, so it routinely overshoots
+  // the budget (e.g. keeps 3 projects when asked for 2). Enforce the counts
+  // deterministically after the fact — anything trimmed is recorded in
+  // `dropped` so the UI still shows what was cut and why.
+  return enforcePageBudget(result, pageTarget);
+}
+
+/** Exported for tests. */
+export function enforcePageBudget(r: TailoredResume, target: 1 | 2): TailoredResume {
+  const maxWork = target === 1 ? 3 : 6;
+  const maxProj = target === 1 ? 2 : 4;
+  const maxBullets = target === 1 ? 3 : 5;
+  const p = r.profile;
+  const reason = `Trimmed to fit ${target} page${target > 1 ? "s" : ""}.`;
+  const dropped = [...r.dropped];
+  for (const w of p.work.slice(maxWork)) {
+    dropped.push({ kind: "work", title: [w.position, w.name].filter(Boolean).join(" @ "), reason });
+  }
+  for (const pr of p.projects.slice(maxProj)) {
+    dropped.push({ kind: "project", title: pr.name || "", reason });
+  }
+  return {
+    ...r,
+    dropped,
+    profile: {
+      ...p,
+      work: p.work.slice(0, maxWork).map((w) => ({ ...w, highlights: w.highlights.slice(0, maxBullets) })),
+      projects: p.projects
+        .slice(0, maxProj)
+        .map((pr) => ({ ...pr, highlights: pr.highlights.slice(0, maxBullets) })),
+      publications: target === 1 ? p.publications.slice(0, 3) : p.publications,
+      awards: target === 1 ? p.awards.slice(0, 3) : p.awards,
+    },
+  };
 }

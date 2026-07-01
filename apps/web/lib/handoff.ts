@@ -1,6 +1,13 @@
 "use client";
 
-import type { Job } from "./types";
+import type { Job, MatchResult } from "./types";
+
+export interface Handoff {
+  job: Job;
+  /** The match score the extension already computed, if any — reused so the
+   *  web app shows the same number instead of re-scoring (saves an AI call). */
+  match: MatchResult | null;
+}
 
 /**
  * The browser extension (Phase 2) captures a job from a career page and hands it
@@ -17,7 +24,7 @@ import type { Job } from "./types";
  * the old base64-in-URL approach overflowed header limits → HTTP 431). Legacy
  * `?job=<base64>` is still decoded as a fallback.
  */
-export async function readJobFromUrl(): Promise<Job | null> {
+export async function readJobFromUrl(): Promise<Handoff | null> {
   if (typeof window === "undefined") return null;
   const params = new URLSearchParams(window.location.search);
 
@@ -27,8 +34,12 @@ export async function readJobFromUrl(): Promise<Job | null> {
       const res = await fetch(`/api/handoff?id=${encodeURIComponent(token)}`);
       cleanUrl(params, "h");
       if (!res.ok) return null;
-      const { job } = (await res.json()) as { job?: Partial<Job> };
-      return job && String(job.description ?? "").trim() ? normalizeJob(job) : null;
+      const { job, match } = (await res.json()) as {
+        job?: Partial<Job>;
+        match?: MatchResult | null;
+      };
+      if (!job || !String(job.description ?? "").trim()) return null;
+      return { job: normalizeJob(job), match: match ?? null };
     } catch {
       cleanUrl(params, "h");
       return null;
@@ -54,7 +65,7 @@ function cleanUrl(params: URLSearchParams, key: string) {
   window.history.replaceState({}, "", clean);
 }
 
-function readLegacyJob(params: URLSearchParams): Job | null {
+function readLegacyJob(params: URLSearchParams): Handoff | null {
   const raw = params.get("job");
   if (!raw) return null;
 
@@ -76,7 +87,7 @@ function readLegacyJob(params: URLSearchParams): Job | null {
       window.location.pathname + (params.toString() ? `?${params}` : "");
     window.history.replaceState({}, "", clean);
 
-    return job;
+    return { job, match: null };
   } catch {
     return null;
   }

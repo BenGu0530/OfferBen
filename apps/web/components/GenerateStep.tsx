@@ -375,14 +375,14 @@ export function GenerateStep({
               <button
                 type="button"
                 className="btn-ghost"
-                onClick={() => downloadText(profileToLatex(resumeProfile), `${sanitize(profile.basics.name)}_resume.tex`, "application/x-tex")}
+                onClick={() => downloadText(profileToLatex(resumeProfile, { pageTarget }), `${sanitize(profile.basics.name)}_resume.tex`, "application/x-tex")}
               >
                 Download .tex
               </button>
               <button
                 type="button"
                 className="btn-ghost"
-                onClick={() => openInOverleaf(profileToLatex(resumeProfile))}
+                onClick={() => openInOverleaf(profileToLatex(resumeProfile, { pageTarget }))}
               >
                 Open in Overleaf ↗
               </button>

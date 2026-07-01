@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * In-memory + TTL: fine for the local dev server (single process). A hosted API
  * (issue #13) would swap this for a real short-lived store.
  */
-const store = new Map<string, { job: unknown; t: number }>();
+const store = new Map<string, { job: unknown; match?: unknown; t: number }>();
 const TTL_MS = 10 * 60 * 1000;
 
 function gc() {
@@ -21,16 +21,18 @@ function gc() {
 }
 
 export async function POST(req: Request) {
-  let body: { job?: unknown };
+  let body: { job?: unknown; match?: unknown };
   try {
-    body = (await req.json()) as { job?: unknown };
+    body = (await req.json()) as { job?: unknown; match?: unknown };
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
   if (!body.job) return NextResponse.json({ error: "No job provided." }, { status: 400 });
   gc();
   const id = crypto.randomUUID().slice(0, 12);
-  store.set(id, { job: body.job, t: Date.now() });
+  // Carry the match result too (if the panel already scored it) so the web app
+  // shows the SAME score instead of re-scoring — consistent, and saves a call.
+  store.set(id, { job: body.job, match: body.match ?? null, t: Date.now() });
   return NextResponse.json({ id });
 }
 
@@ -38,5 +40,5 @@ export async function GET(req: Request) {
   const id = new URL(req.url).searchParams.get("id") ?? "";
   const entry = store.get(id);
   if (!entry) return NextResponse.json({ error: "Handoff expired or not found." }, { status: 404 });
-  return NextResponse.json({ job: entry.job });
+  return NextResponse.json({ job: entry.job, match: entry.match ?? null });
 }

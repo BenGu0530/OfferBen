@@ -542,6 +542,9 @@ function resetGen() {
 async function tailorInOfferBen() {
   if (!currentJob) return;
   const job = { ...currentJob, url: lastUrl || "", source: currentJob.source || "extension" };
+  // Pass along the score we already computed for this URL so the web app shows
+  // the SAME number instead of re-scoring (consistent, and saves an AI call).
+  const match = (lastUrl && matchCache[lastUrl] && matchCache[lastUrl].match) || null;
   const base = appUrl.replace(/\/+$/, "");
   // Hand the job off via a short token, not the full JD in the URL (that
   // overflowed header limits → HTTP 431).
@@ -549,7 +552,7 @@ async function tailorInOfferBen() {
     const res = await fetch(`${base}/api/handoff`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job }),
+      body: JSON.stringify({ job, match }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.id) throw new Error(data.error || "Handoff failed.");

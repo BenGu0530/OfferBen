@@ -24,7 +24,18 @@ function flatSkills(p: Profile): string[] {
   return p.skills.flatMap((s) => (s.keywords.length ? s.keywords : s.name ? [s.name] : []));
 }
 
-export function profileToLatex(p: Profile): string {
+export function profileToLatex(p: Profile, opts: { pageTarget?: 1 | 2 } = {}): string {
+  // For a one-pager, shrink font / margins / spacing so a well-curated profile
+  // reliably fits — the content is already capped in `tailorResume`, this just
+  // buys headroom for bullet wrapping so it doesn't spill to a second page.
+  const compact = opts.pageTarget === 1;
+  const cls = compact ? "10pt" : "11pt";
+  const margin = compact ? "0.45in" : "0.6in";
+  const listSpec = compact
+    ? "leftmargin=1.1em,topsep=0pt,itemsep=0pt,parsep=0pt"
+    : "leftmargin=1.2em,topsep=1pt,itemsep=0pt,parsep=0pt";
+  const secSpace = compact ? "{0pt}{5pt}{2pt}" : "{0pt}{7pt}{3pt}";
+
   const b = p.basics;
   const contact = [
     b.email,
@@ -39,13 +50,14 @@ export function profileToLatex(p: Profile): string {
 
   const L: string[] = [];
   L.push(
-    "\\documentclass[11pt,letterpaper]{article}",
-    "\\usepackage[margin=0.6in]{geometry}",
+    `\\documentclass[${cls},letterpaper]{article}`,
+    `\\usepackage[margin=${margin}]{geometry}`,
     "\\usepackage{enumitem,titlesec,hyperref}",
     "\\hypersetup{hidelinks}",
-    "\\setlist[itemize]{leftmargin=1.2em,topsep=1pt,itemsep=0pt,parsep=0pt}",
+    `\\setlist[itemize]{${listSpec}}`,
+    "\\setlength{\\parskip}{0pt}",
     "\\titleformat{\\section}{\\large\\bfseries}{}{0pt}{}[\\titlerule]",
-    "\\titlespacing{\\section}{0pt}{7pt}{3pt}",
+    `\\titlespacing{\\section}${secSpace}`,
     "\\pagestyle{empty}",
     "\\begin{document}",
     "\\begin{center}",

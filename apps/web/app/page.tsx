@@ -45,8 +45,12 @@ export default function HomePage() {
     void (async () => {
       const incoming = await readJobFromUrl();
       if (incoming) {
-        setJobState(incoming);
-        storage.saveJob(incoming);
+        setJobState(incoming.job);
+        storage.saveJob(incoming.job);
+        // Reuse the score the extension already computed, so the web app shows
+        // the SAME number (no re-scoring wobble, no extra AI call). Land on the
+        // Match step so the user sees it before generating.
+        if (incoming.match) setMatch(incoming.match);
         setStep(p ? 2 : 0);
         return;
       }
