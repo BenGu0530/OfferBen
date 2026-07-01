@@ -42,7 +42,7 @@ npm run dev          # web app at http://localhost:3000
 npm run build        # production build of the web app
 npm run typecheck    # tsc --noEmit across all workspaces — run before committing
 npm test             # Vitest (unit tests for pure core logic) — run before committing
-npm run lint         # next lint (web)
+npm run lint         # eslint . across the monorepo (npm run lint:fix to autofix)
 ```
 Node 20+ (developed on Node via Homebrew). Extension: load `apps/extension`
 unpacked at `chrome://extensions` (Developer mode). See `apps/extension/README.md`.
@@ -110,7 +110,8 @@ no AI), `people/dossier` (OpenAlex + AI taste). All wrapped by `lib/server.ts`
   (no bundler) — keep injected scripts self-contained.
 - Match the surrounding code's style; comments explain *why*, not *what*.
 - Shared agent config lives in `.claude/` (committed): `settings.json` wires two
-  hooks — auto-Prettier on edited files (`hooks/format.sh`) and a Bash guard that
+  hooks — auto-format + lint-fix on edited files (Prettier, then `eslint --fix`;
+  `hooks/format.sh`) and a Bash guard that
   blocks force-push / `rm -rf` on dangerous paths (`hooks/guard-bash.sh`). Keep
   `settings.local.json` and `CLAUDE.local.md` personal (git-ignored).
 - Work is tracked in GitHub Issues (labels P1/P2/P3 + area); `docs/ISSUES.md` is

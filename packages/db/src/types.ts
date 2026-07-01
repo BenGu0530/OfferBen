@@ -1,4 +1,4 @@
-import type { Profile, Job, ParsedJob, MatchResult } from "@offerben/core";
+import type { Profile, ParsedJob, MatchResult } from "@offerben/core";
 
 /** Row shapes mirroring schema.sql. `data` columns are typed via @offerben/core. */
 

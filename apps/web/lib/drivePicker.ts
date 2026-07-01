@@ -18,7 +18,6 @@ export function pickerEnabled(): boolean {
   return CLIENT_ID.length > 0 && API_KEY.length > 0;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function w(): any {
   return window as any;
 }

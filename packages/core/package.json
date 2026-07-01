@@ -7,7 +7,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"(core) no lint configured\"",
+    "lint": "eslint .",
     "build": "echo \"(core) source-only package, transpiled by the consumer\""
   },
   "dependencies": {
