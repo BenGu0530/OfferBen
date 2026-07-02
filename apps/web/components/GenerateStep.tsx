@@ -619,12 +619,14 @@ function CurationEditor({
   onAddProject: (title: string) => void;
 }) {
   // A dropped item is still "dropped" only if it's not currently in the resume
-  // (so re-adding it removes it from this list).
-  const stillDropped = dropped.filter((d) =>
-    d.kind === "work"
-      ? !profile.work.some((w) => titleMatches(d.title, w.position, w.name))
-      : !profile.projects.some((p) => titleMatches(d.title, p.name)),
-  );
+  // (so re-adding it removes it from this list). Only work/project are
+  // re-addable here — other kinds (publications/awards trimmed for space) are
+  // shown as info elsewhere, not in the add-back list.
+  const stillDropped = dropped.filter((d) => {
+    if (d.kind === "work") return !profile.work.some((w) => titleMatches(d.title, w.position, w.name));
+    if (d.kind === "project") return !profile.projects.some((p) => titleMatches(d.title, p.name));
+    return false;
+  });
 
   const est = estimatePages(profile);
   const overTarget = est > pageTarget + 0.08;

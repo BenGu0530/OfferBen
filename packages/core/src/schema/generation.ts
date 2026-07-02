@@ -1,9 +1,14 @@
 import { z } from "zod";
 import { ProfileSchema } from "./profile";
 
-/** An experience/project the model left OFF the resume for this role, + why. */
+/** A section item the model left OFF the resume for this role, + why. The model
+ *  sometimes drops publications/awards/etc. too, so `kind` accepts any section
+ *  name and `.catch` coerces anything unexpected to "other" — a stray label must
+ *  never fail the whole parse. Only work/project are re-addable in the editor. */
 export const DroppedItemSchema = z.object({
-  kind: z.enum(["work", "project"]).default("project"),
+  kind: z
+    .enum(["work", "project", "publication", "award", "education", "skill", "certificate", "language", "other"])
+    .catch("other"),
   title: z.string().default(""),
   reason: z.string().default(""),
 });

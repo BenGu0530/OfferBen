@@ -36,4 +36,26 @@ describe("TailoredResumeSchema", () => {
     expect(r.dropped[0].title).toBe("Snake robot");
     expect(r.dropped[0].kind).toBe("project");
   });
+
+  it("does NOT throw when the model drops a publication/award (kind outside work|project)", () => {
+    // Regression: the model sometimes labels dropped items "publication"/"award";
+    // that must not fail the whole parse.
+    const r = TailoredResumeSchema.parse({
+      profile: {},
+      dropped: [
+        { kind: "publication", title: "IROS 2026 paper", reason: "space" },
+        { kind: "award", title: "SURF", reason: "space" },
+      ],
+    });
+    expect(r.dropped).toHaveLength(2);
+    expect(r.dropped[0].kind).toBe("publication");
+  });
+
+  it("coerces a truly unknown kind to 'other' instead of throwing", () => {
+    const r = TailoredResumeSchema.parse({
+      profile: {},
+      dropped: [{ kind: "hobbies", title: "Chess", reason: "irrelevant" }],
+    });
+    expect(r.dropped[0].kind).toBe("other");
+  });
 });

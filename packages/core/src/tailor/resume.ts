@@ -57,6 +57,7 @@ export async function tailorResume(
     "- Tighten `basics.summary` into a 2-3 sentence pitch aimed at THIS role.",
     "- Keep education/skills, but order skills by relevance. ATS-safe: plain bullets, standard sections.",
     "- profile.work[] and profile.projects[] must contain ONLY the kept items, in final order.",
+    "- `dropped` is ONLY for work & projects you left off — do NOT put publications, awards, skills, or education there.",
     "",
     "=== TARGET JOB ===",
     `Title: ${job.title}`,
