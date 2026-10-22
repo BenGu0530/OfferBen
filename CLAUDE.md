@@ -92,6 +92,12 @@ unpacked at `chrome://extensions` (Developer mode). See `apps/extension/README.m
 - `profile/extract.ts`, `jd/parse.ts`, `jd/vision.ts`, `match/score.ts`,
   `tailor/resume.ts`, `tailor/letters.ts`, `people/research.ts` (OpenAlex),
   `company/research.ts` (company's own site → `CompanyBrief`, see invariant #4).
+- `library/` — the library (资料库): `library.ts` (pure: apply ingestion proposals,
+  dedupe, `libraryToProfile`), `ingest.ts` (1 AI call: one file → a reviewable proposal).
+- `resume/` — resumes as views over the library: `doc.ts` (sections/items, no-AI
+  `defaultDoc`, `applySectionSet`), `plan.ts` (1 AI call: curate for a job),
+  `validate.ts` (code-level truthfulness: cited facts, numbers, one bold), `latex.ts`
+  (deterministic LaTeX in the owner's one-page layout).
 - `storage/` — `ProfileStore` interface + `GoogleDriveStore`, `AppData` shape
   (profile + job + applications), shared by web + extension.
 
@@ -100,7 +106,10 @@ unpacked at `chrome://extensions` (Developer mode). See `apps/extension/README.m
 `profile/extract`, `match` (1 AI call — derives keywords from the result),
 `tailor`, `letters` (takes an optional `company` brief), `company` (site crawl +
 1 AI call, LRU-cached per company), `capture` (screenshot→vision),
-`people/search` (OpenAlex, no AI), `people/dossier` (OpenAlex + AI taste). All
+`people/search` (OpenAlex, no AI), `people/dossier` (OpenAlex + AI taste),
+`library` (GET/save), `library/upload`, `library/process` (1 AI call per new file),
+`library/draft` (apply/discard a proposal), `library/file` (photo by sha256),
+`resume` (plan = 1 AI call; default/render = no AI; compiles with local tectonic). All
 wrapped by `lib/server.ts` `jsonHandler` (uniform JSON errors) — except
 `letters/pdf`, which returns `application/pdf` and so repeats the guard inline.
 
@@ -124,6 +133,14 @@ wrapped by `lib/server.ts` `jsonHandler` (uniform JSON errors) — except
   context beats the wrong company's.
 - **`letters/pdf` costs nothing** — it's pure typesetting (`@react-pdf/renderer`
   server-side) of text the user already has.
+- **The library lives outside the repo** (`~/OfferBen`, or `OFFERBEN_HOME`): `library.json`,
+  `inbox/`, `files/<sha256>`. Server-only code in `apps/web/lib/library/`. Never move it into
+  the repo — it's personal data.
+- **The API only answers localhost.** `next dev/start -H 127.0.0.1` + `middleware.ts`
+  (loopback Host, same-app or chrome-extension Origin). Library routes read/write personal
+  files, so don't loosen this without adding real auth.
+- **Keep new core code browser-safe** (no `fs`, no `process.env`): the plan may move the
+  library into the extension later.
 - Run `npm run typecheck` AND `npm test` before committing. Tests cover pure core
   logic (`packages/core/test/`); add a test when you add a pure function.
 

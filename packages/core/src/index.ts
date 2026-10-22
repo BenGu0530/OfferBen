@@ -25,7 +25,11 @@ export {
   type PublicationLite,
   type ResearchTaste,
 } from "./people/research";
-export { writePersonOutreach, type OutreachKind, type PersonOutreachInput } from "./people/outreach";
+export {
+  writePersonOutreach,
+  type OutreachKind,
+  type PersonOutreachInput,
+} from "./people/outreach";
 export { scoreMatch, type ScoreMatchInput } from "./match/score";
 export { tailorResume, type TailorResumeInput } from "./tailor/resume";
 export {
@@ -35,6 +39,40 @@ export {
   type ReferralQAInput,
 } from "./tailor/letters";
 export { writeInterviewPrep, type InterviewPrepInput } from "./tailor/interview";
+
+// Library (资料库) + LaTeX resumes built from it
+export {
+  newId,
+  normKey,
+  findEntry,
+  childrenOf,
+  libraryOutline,
+  applyProposal,
+  removeEntry,
+  libraryToProfile,
+  type ApplyProposalOptions,
+  type ApplyResult,
+} from "./library/library";
+export { proposeFromFile, type ProposeFromFileInput } from "./library/ingest";
+export * from "./resume/doc";
+export {
+  validateResumeDoc,
+  boldJobKeywords,
+  trimStep,
+  limitBold,
+  numbersIn,
+  type ValidateResult,
+} from "./resume/validate";
+export {
+  renderResumeTex,
+  richText,
+  texEscape,
+  inlineExtras,
+  DENSITY,
+  type DensityPreset,
+  type RenderOptions,
+} from "./resume/latex";
+export { planResume, type PlanResumeInput } from "./resume/plan";
 
 // Utilities
 export { clamp, compact, compactProfile } from "./util/object";

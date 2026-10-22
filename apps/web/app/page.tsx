@@ -6,6 +6,8 @@ import { PeopleView } from "@/components/PeopleView";
 import { BackupControls } from "@/components/BackupControls";
 import { GenerateStep } from "@/components/GenerateStep";
 import { JobStep } from "@/components/JobStep";
+import { LibraryResume } from "@/components/LibraryResume";
+import { LibraryView } from "@/components/LibraryView";
 import { MatchStep } from "@/components/MatchStep";
 import { ProfileStep } from "@/components/ProfileStep";
 import { SettingsView } from "@/components/SettingsView";
@@ -26,7 +28,9 @@ const EMPTY_JOB: Job = { title: "", company: "", description: "" };
 
 export default function HomePage() {
   const [step, setStep] = useState(0);
-  const [view, setView] = useState<"wizard" | "tracker" | "people" | "settings">("wizard");
+  const [view, setView] = useState<"wizard" | "tracker" | "people" | "settings" | "library">(
+    "wizard",
+  );
   const [aiLabel, setAiLabel] = useState("Server key");
   const [profile, setProfileState] = useState<Profile | null>(null);
   const [job, setJobState] = useState<Job>(EMPTY_JOB);
@@ -114,6 +118,13 @@ export default function HomePage() {
                 <button
                   type="button"
                   className="btn-ghost px-2.5 py-1 text-xs"
+                  onClick={() => setView("library")}
+                >
+                  Library
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost px-2.5 py-1 text-xs"
                   onClick={() => setView("people")}
                 >
                   Research
@@ -157,7 +168,13 @@ export default function HomePage() {
         </div>
       </header>
 
-      {view === "tracker" ? (
+      {view === "library" ? (
+        <LibraryView
+          onUseAsProfile={(p) => {
+            setProfile(p);
+          }}
+        />
+      ) : view === "tracker" ? (
         <ApplicationsView applications={applications} onChange={setApplications} />
       ) : view === "people" ? (
         <PeopleView profile={profile} />
@@ -195,6 +212,12 @@ export default function HomePage() {
               onNext={() => setStep(3)}
               onTrackerChange={setApplications}
             />
+          )}
+
+          {step === 3 && profile && (
+            <div className="mb-6">
+              <LibraryResume job={job} />
+            </div>
           )}
 
           {step === 3 && profile && (
