@@ -97,6 +97,21 @@ function setStatus(msg, isError = false) {
   show("status");
 }
 
+// Every call to the local web app goes through here. fetch() only rejects on a
+// network failure (app not running, wrong port), and the browser's message for
+// that is an opaque "Failed to fetch", so say what's actually wrong and how to
+// fix it.
+async function callApp(path, init) {
+  const base = appUrl.replace(/\/+$/, "");
+  try {
+    return await fetch(`${base}${path}`, init);
+  } catch {
+    throw new Error(
+      `Can't reach the OfferBen app at ${base}. Start it with "npm run dev" in the repo, then retry.`,
+    );
+  }
+}
+
 function setJobLine(job) {
   els.jobline.textContent = job
     ? [job.title, job.company].filter(Boolean).join(" · ").slice(0, 80) || "Job detected"
@@ -188,7 +203,7 @@ async function importLinkedIn() {
       throw new Error("Couldn't read the profile. Scroll to load it, then retry.");
 
     setStatus("Extracting your profile…");
-    const res = await fetch(`${appUrl.replace(/\/+$/, "")}/api/profile/extract`, {
+    const res = await callApp("/api/profile/extract", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
@@ -245,7 +260,7 @@ async function readJob({ silent = false, allowVision = false, forUrl = null } = 
       if (nowUrl !== tab.url || (forUrl != null && nowUrl !== forUrl)) {
         return null;
       }
-      const res = await fetch(`${appUrl.replace(/\/+$/, "")}/api/capture`, {
+      const res = await callApp("/api/capture", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageBase64: dataUrl.split(",")[1], mimeType: "image/png" }),
@@ -314,7 +329,7 @@ async function run({ silent = false, force = false } = {}) {
 
     setStatus(`Scoring against your profile…`);
     inFlightUrl = url;
-    const res = await fetch(`${appUrl.replace(/\/+$/, "")}/api/match`, {
+    const res = await callApp("/api/match", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ profile, job }),
@@ -709,7 +724,7 @@ async function getCompanyBrief(job) {
 
   els.genStatus.textContent = `Reading ${name}'s site…`;
   try {
-    const res = await fetch(`${appUrl.replace(/\/+$/, "")}/api/company`, {
+    const res = await callApp("/api/company", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -756,7 +771,7 @@ async function genLetter(kind) {
     const brief = research ? research.brief : null;
 
     els.genStatus.textContent = "Writing…";
-    const res = await fetch(`${appUrl.replace(/\/+$/, "")}/api/letters`, {
+    const res = await callApp("/api/letters", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ profile, job: currentJob, kind, company: brief }),
@@ -794,7 +809,7 @@ async function savePdf() {
   els.genPdf.disabled = true;
   let objectUrl = null;
   try {
-    const res = await fetch(`${appUrl.replace(/\/+$/, "")}/api/letters/pdf`, {
+    const res = await callApp("/api/letters/pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -847,7 +862,7 @@ async function tailorInOfferBen() {
   // Hand the job off via a short token, not the full JD in the URL (that
   // overflowed header limits → HTTP 431).
   try {
-    const res = await fetch(`${base}/api/handoff`, {
+    const res = await callApp("/api/handoff", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job, match }),
