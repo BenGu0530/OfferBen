@@ -1,6 +1,6 @@
 "use client";
 
-import type { AppData, ApplicationRecord, Job, Profile } from "./types";
+import type { AppData, ApplicationRecord, Job, MatchResult, ParsedJob, Profile } from "./types";
 
 /**
  * Local (browser) persistence for the MVP. When Supabase env vars are present,
@@ -13,7 +13,21 @@ const KEYS = {
   profile: "offerben.profile.v1",
   job: "offerben.job.v1",
   applications: "offerben.applications.v1",
+  match: "offerben.match.v1",
 } as const;
+
+/** Stable identity for a job — the same formula the tracker & generate steps use. */
+export function applicationId(job: Pick<Job, "url" | "company" | "title">): string {
+  return job.url || `${job.company}::${job.title}`;
+}
+
+/** Cached match result for one job (persisted so a refresh doesn't re-spend an AI call). */
+export interface CachedMatch {
+  parsed: ParsedJob | null;
+  match: MatchResult | null;
+}
+
+const MATCH_CACHE_CAP = 20;
 
 function read<T>(key: string): T | null {
   if (typeof window === "undefined") return null;
@@ -56,7 +70,9 @@ export const storage = {
   loadApplications: (): ApplicationRecord[] => read<ApplicationRecord[]>(KEYS.applications) ?? [],
   /** Insert or update by id; newest first. Returns the updated list. */
   saveApplication(app: ApplicationRecord): ApplicationRecord[] {
-    const list = (read<ApplicationRecord[]>(KEYS.applications) ?? []).filter((a) => a.id !== app.id);
+    const list = (read<ApplicationRecord[]>(KEYS.applications) ?? []).filter(
+      (a) => a.id !== app.id,
+    );
     const next = [app, ...list];
     write(KEYS.applications, next);
     return next;
@@ -65,6 +81,22 @@ export const storage = {
     const next = (read<ApplicationRecord[]>(KEYS.applications) ?? []).filter((a) => a.id !== id);
     write(KEYS.applications, next);
     return next;
+  },
+
+  // --- per-job match cache (avoid re-scoring the same job on refresh) ---
+  /** Cached match/parsed for a job key, or null if we haven't scored it yet. */
+  loadMatch(jobKey: string): CachedMatch | null {
+    const map = read<Record<string, CachedMatch>>(KEYS.match) ?? {};
+    return map[jobKey] ?? null;
+  },
+  /** Persist a job's match result, capped to the most recent MATCH_CACHE_CAP jobs. */
+  saveMatch(jobKey: string, value: CachedMatch): void {
+    const map = read<Record<string, CachedMatch>>(KEYS.match) ?? {};
+    // Re-insert this key last so it survives the cap trim (Map preserves order).
+    delete map[jobKey];
+    const entries = [...Object.entries(map), [jobKey, value] as const];
+    const trimmed = entries.slice(-MATCH_CACHE_CAP);
+    write(KEYS.match, Object.fromEntries(trimmed));
   },
 
   /** Serialize everything to a portable JSON string (for cross-machine backup). */

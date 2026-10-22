@@ -10,6 +10,13 @@ export function jsonHandler<T>(
   fn: (body: T, req: Request) => Promise<unknown>,
 ): (req: Request) => Promise<NextResponse> {
   return async (req: Request) => {
+    // why: requiring a JSON Content-Type forces browsers to send a CORS
+    // preflight, which kills the cross-site "simple request" CSRF vector
+    // (a form/img POST can't set this header without preflight).
+    if (!(req.headers.get("content-type") || "").includes("application/json")) {
+      return NextResponse.json({ error: "Expected application/json" }, { status: 415 });
+    }
+
     let body: T;
     try {
       body = (await req.json()) as T;
@@ -21,8 +28,7 @@ export function jsonHandler<T>(
       const result = await fn(body, req);
       return NextResponse.json(result);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Unexpected server error.";
+      const message = err instanceof Error ? err.message : "Unexpected server error.";
       const status = /API key|out of quota|busy/i.test(message) ? 503 : 500;
       console.error("[offerben:api]", message);
       return NextResponse.json({ error: message }, { status });

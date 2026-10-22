@@ -1,8 +1,4 @@
-import type {
-  AIProvider,
-  GenerateJSONOptions,
-  GenerateTextOptions,
-} from "./provider";
+import type { AIProvider, GenerateJSONOptions, GenerateTextOptions } from "./provider";
 import { extractJson } from "./json";
 import { withRetry } from "./retry";
 
@@ -56,7 +52,10 @@ export class OpenAICompatibleProvider implements AIProvider {
       const content: Array<TextContent | ImageContent> = [{ type: "text", text: opts.prompt }];
       for (const f of opts.files) {
         if (f.mimeType.startsWith("image/")) {
-          content.push({ type: "image_url", image_url: { url: `data:${f.mimeType};base64,${f.data}` } });
+          content.push({
+            type: "image_url",
+            image_url: { url: `data:${f.mimeType};base64,${f.data}` },
+          });
         } else {
           throw new Error(
             `This provider can't read ${f.mimeType} files. Paste the text instead, or use Gemini for PDF parsing.`,
@@ -86,7 +85,20 @@ export class OpenAICompatibleProvider implements AIProvider {
     });
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
-      throw new Error(`AI request failed (${res.status}). ${detail.slice(0, 300)}`);
+      // Surface `Retry-After` (seconds or HTTP-date) so backoff can respect the
+      // server's requested delay instead of discarding it. Attach an explicit
+      // numeric `status` so retry classification trusts it over body prose.
+      const retryAfter = res.headers.get("retry-after") ?? undefined;
+      const suffix = retryAfter ? ` (retry after ${retryAfter})` : "";
+      const err = new Error(
+        `AI request failed (${res.status}). ${detail.slice(0, 300)}${suffix}`,
+      ) as Error & {
+        status?: number;
+        retryAfter?: string;
+      };
+      err.status = res.status;
+      if (retryAfter) err.retryAfter = retryAfter;
+      throw err;
     }
     const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
     return (data.choices?.[0]?.message?.content ?? "").trim();

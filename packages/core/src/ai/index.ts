@@ -30,18 +30,36 @@ export interface AIConfig {
  *        fine-tuned model behind any OpenAI-compatible server.
  */
 export function createAIProvider(cfg: AIConfig = {}): AIProvider {
-  const provider = (cfg.provider || process.env.AI_PROVIDER || "gemini").toLowerCase();
+  // why (#28): fields must NOT fall back to env independently. A request that
+  // supplies `provider`/`baseURL` but NO key of its own would otherwise pair the
+  // server's env key with a client-chosen endpoint — exfiltrating our key to an
+  // arbitrary host (SSRF-style). Rule: only pair a CLIENT baseURL/provider with a
+  // CLIENT key; only pair the ENV key with the ENV provider/baseURL. Never mix.
+  // `model` is not a security boundary, so it stays overridable in both cases.
+  const usingClientKey = !!cfg.apiKey;
+  const provider = (
+    (usingClientKey && cfg.provider) ||
+    process.env.AI_PROVIDER ||
+    "gemini"
+  ).toLowerCase();
 
   if (provider === "openai" || provider === "openai-compatible") {
     const apiKey = cfg.apiKey || process.env.AI_API_KEY;
     const model = cfg.model || process.env.AI_MODEL;
     if (!apiKey) {
-      throw new Error("No API key. Add one in Settings (BYOK) or set AI_API_KEY in apps/web/.env.local.");
+      throw new Error(
+        "No API key. Add one in Settings (BYOK) or set AI_API_KEY in apps/web/.env.local.",
+      );
     }
     if (!model) {
-      throw new Error("No model set. Pick one in Settings (e.g. llama-3.3-70b-versatile) or set AI_MODEL.");
+      throw new Error(
+        "No model set. Pick one in Settings (e.g. llama-3.3-70b-versatile) or set AI_MODEL.",
+      );
     }
-    return new OpenAICompatibleProvider({ apiKey, model, baseURL: cfg.baseURL || process.env.AI_BASE_URL });
+    const baseURL = usingClientKey
+      ? cfg.baseURL || process.env.AI_BASE_URL
+      : process.env.AI_BASE_URL;
+    return new OpenAICompatibleProvider({ apiKey, model, baseURL });
   }
 
   // Default: Gemini.

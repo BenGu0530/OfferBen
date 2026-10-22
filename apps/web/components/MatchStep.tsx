@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
-import { storage } from "@/lib/storage";
+import { applicationId, storage } from "@/lib/storage";
 import type { ApplicationRecord, Job, MatchResult, ParsedJob, Profile } from "@/lib/types";
 import { Chip, ErrorBanner, SectionTitle, Spinner } from "./ui";
 
@@ -18,7 +18,7 @@ export function MatchStep({
   profile: Profile;
   job: Job;
   match: MatchResult | null;
-  onResult: (parsed: ParsedJob, match: MatchResult) => void;
+  onResult: (parsed: ParsedJob | null, match: MatchResult) => void;
   onBack: () => void;
   onNext: () => void;
   onTrackerChange?: (list: ApplicationRecord[]) => void;
@@ -30,7 +30,7 @@ export function MatchStep({
 
   function saveToTracker() {
     if (!match) return;
-    const id = job.url || `${job.company}::${job.title}`;
+    const id = applicationId(job);
     const existing = storage.loadApplications().find((a) => a.id === id);
     const now = new Date().toISOString();
     const list = storage.saveApplication({
@@ -55,6 +55,9 @@ export function MatchStep({
     setLoading(true);
     try {
       const { parsed, match: m } = await api.match({ profile, job });
+      // Persist so a page refresh (or coming back to this job) reuses the score
+      // instead of spending another scarce AI call. Keyed by job identity.
+      storage.saveMatch(applicationId(job), { parsed, match: m });
       onResult(parsed, m);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Match failed.");
@@ -64,10 +67,15 @@ export function MatchStep({
   }
 
   useEffect(() => {
-    if (!match && !ran.current) {
-      ran.current = true;
-      void run();
+    if (match || ran.current) return;
+    ran.current = true;
+    // Reuse a previously computed score for this job before firing the API.
+    const cached = storage.loadMatch(applicationId(job));
+    if (cached?.match) {
+      onResult(cached.parsed, cached.match);
+      return;
     }
+    void run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -113,12 +121,7 @@ export function MatchStep({
               </button>
             </>
           ) : null}
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={!match}
-            onClick={onNext}
-          >
+          <button type="button" className="btn-primary" disabled={!match} onClick={onNext}>
             Generate documents →
           </button>
         </div>
@@ -136,9 +139,7 @@ function MatchView({ match }: { match: MatchResult }) {
           {match.verdict ? (
             <div className="text-lg font-semibold text-white">{match.verdict}</div>
           ) : null}
-          {match.summary ? (
-            <p className="mt-1 text-sm text-slate-300">{match.summary}</p>
-          ) : null}
+          {match.summary ? <p className="mt-1 text-sm text-slate-300">{match.summary}</p> : null}
         </div>
       </div>
 
@@ -164,8 +165,7 @@ function ScoreRing({ score }: { score: number }) {
   const c = 2 * Math.PI * r;
   const pct = Math.max(0, Math.min(100, score));
   const dash = (pct / 100) * c;
-  const color =
-    pct >= 75 ? "#34d399" : pct >= 50 ? "#818cf8" : "#fbbf24";
+  const color = pct >= 75 ? "#34d399" : pct >= 50 ? "#818cf8" : "#fbbf24";
   return (
     <div className="relative h-28 w-28 shrink-0">
       <svg viewBox="0 0 110 110" className="h-28 w-28 -rotate-90">

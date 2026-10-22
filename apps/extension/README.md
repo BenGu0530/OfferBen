@@ -38,6 +38,59 @@ career page ──auto-read──▶ OfferBen side panel ──?job=base64──
 > Safari does not support the Side Panel API — a Safari build would need a
 > different surface (popover/window) and is out of scope for this Chrome-first v1.
 
+## Pinning the extension ID (required for Drive OAuth)
+
+**Why this matters.** For an _unpacked_ extension, Chrome derives the extension
+ID from a hash of the folder path it was loaded from. That means the ID is
+**different on every machine** (and changes if you move the folder). The Drive
+"Connect" flow in `drive.js` uses a hardcoded OAuth `CLIENT_ID`, and Google
+redirects back to `https://<extension-id>.chromiumapp.org/`. If the ID doesn't
+match a redirect URI registered on that OAuth client, Google rejects the flow
+with **`redirect_uri_mismatch`** (the panel now surfaces a friendly hint that
+points here). Pinning the ID makes it stable across machines so a single
+registered redirect URI works for everyone.
+
+**Steps (do this once, commit the result):**
+
+1. In `chrome://extensions`, with Developer mode on, click **Pack extension**.
+   Point "Extension root directory" at `apps/extension` and leave the private-key
+   field empty. Chrome produces `extension.crx` **and** `extension.pem` next to
+   the folder. Keep the `.pem` safe (it is the private key — do **not** commit it).
+2. Derive the public `key` (base64) from that `.pem`. From a shell:
+
+   ```bash
+   # prints the base64 public key to paste into manifest.json
+   openssl rsa -in extension.pem -pubout -outform DER 2>/dev/null | openssl base64 -A
+   ```
+
+3. Add that value to `manifest.json` as a top-level `"key"` field:
+
+   ```jsonc
+   {
+     "manifest_version": 3,
+     "name": "OfferBen — Job Copilot",
+     "key": "PASTE_THE_BASE64_PUBLIC_KEY_HERE",
+     // …rest of the manifest…
+   }
+   ```
+
+   > Do **not** add a placeholder/malformed `"key"` — Chrome refuses to load the
+   > extension if the key is invalid. Only add a real derived key. That's why
+   > `manifest.json` currently ships _without_ a `"key"`.
+
+4. Reload the unpacked extension. The **ID is now stable** and identical on every
+   machine that uses this same `manifest.json`. Confirm it in `chrome://extensions`.
+5. In the Google Cloud Console, on the OAuth client used by `drive.js`
+   (`CLIENT_ID` there), add the redirect URI:
+
+   ```
+   https://<stable-id>.chromiumapp.org/
+   ```
+
+   using the pinned ID from step 4. The redirect URI in `drive.js`
+   (`chrome.identity.getRedirectURL()`) resolves to exactly this, so the two must
+   match or Drive connect fails with `redirect_uri_mismatch`.
+
 ## Files
 
 - `manifest.json` — MV3 manifest (`sidePanel`, `activeTab`, `scripting`, `storage`, `tabs`).

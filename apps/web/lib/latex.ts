@@ -7,15 +7,27 @@ import type { Profile } from "./types";
  * the formatting is a fixed template. Good for the academic crowd (Overleaf).
  */
 
-function esc(s: string | undefined): string {
-  return (s || "")
-    .replace(/\\/g, "\\textbackslash{}")
-    .replace(/([&%$#_{}])/g, "\\$1")
-    .replace(/~/g, "\\textasciitilde{}")
-    .replace(/\^/g, "\\textasciicircum{}");
+const LATEX_ESCAPES: Record<string, string> = {
+  "\\": "\\textbackslash{}",
+  "&": "\\&",
+  "%": "\\%",
+  $: "\\$",
+  "#": "\\#",
+  _: "\\_",
+  "{": "\\{",
+  "}": "\\}",
+  "~": "\\textasciitilde{}",
+  "^": "\\textasciicircum{}",
+};
+
+function esc(s: string | null | undefined): string {
+  // Single pass over every LaTeX-special char so replacements never re-escape
+  // each other. The braces inside \textbackslash{} must NOT be escaped again —
+  // the old two-pass version escaped the backslash first, then its own braces.
+  return (s || "").replace(/[\\&%$#_{}~^]/g, (c) => LATEX_ESCAPES[c]);
 }
 
-function dates(a?: string, b?: string): string {
+function dates(a?: string | null, b?: string | null): string {
   const s = [a, b].filter(Boolean).join(" -- ");
   return s ? esc(s) : "";
 }
@@ -51,6 +63,9 @@ export function profileToLatex(p: Profile, opts: { pageTarget?: 1 | 2 } = {}): s
   const L: string[] = [];
   L.push(
     `\\documentclass[${cls},letterpaper]{article}`,
+    // T1 + utf8 so non-ASCII names (é, ü, ñ, …) compile instead of erroring.
+    "\\usepackage[T1]{fontenc}",
+    "\\usepackage[utf8]{inputenc}",
     `\\usepackage[margin=${margin}]{geometry}`,
     "\\usepackage{enumitem,titlesec,hyperref}",
     "\\hypersetup{hidelinks}",
@@ -78,7 +93,11 @@ export function profileToLatex(p: Profile, opts: { pageTarget?: 1 | 2 } = {}): s
       L.push(`\\noindent\\textbf{${head}} \\hfill ${dates(w.startDate, w.endDate)}\\\\`);
       if (w.summary) L.push(`${esc(w.summary)}`);
       if (w.highlights.length) {
-        L.push("\\begin{itemize}", ...w.highlights.map((h) => `\\item ${esc(h)}`), "\\end{itemize}");
+        L.push(
+          "\\begin{itemize}",
+          ...w.highlights.map((h) => `\\item ${esc(h)}`),
+          "\\end{itemize}",
+        );
       }
     }
   }
@@ -89,7 +108,11 @@ export function profileToLatex(p: Profile, opts: { pageTarget?: 1 | 2 } = {}): s
       L.push(`\\noindent\\textbf{${esc(pr.name)}}\\\\`);
       if (pr.description) L.push(esc(pr.description));
       if (pr.highlights.length) {
-        L.push("\\begin{itemize}", ...pr.highlights.map((h) => `\\item ${esc(h)}`), "\\end{itemize}");
+        L.push(
+          "\\begin{itemize}",
+          ...pr.highlights.map((h) => `\\item ${esc(h)}`),
+          "\\end{itemize}",
+        );
       }
     }
   }
@@ -113,7 +136,9 @@ export function profileToLatex(p: Profile, opts: { pageTarget?: 1 | 2 } = {}): s
     L.push("\\section*{Publications}");
     L.push(
       "\\begin{itemize}",
-      ...p.publications.map((pub) => `\\item ${esc(pub.name)}${pub.publisher ? ` --- ${esc(pub.publisher)}` : ""}`),
+      ...p.publications.map(
+        (pub) => `\\item ${esc(pub.name)}${pub.publisher ? ` --- ${esc(pub.publisher)}` : ""}`,
+      ),
       "\\end{itemize}",
     );
   }

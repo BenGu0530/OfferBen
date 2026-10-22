@@ -12,7 +12,7 @@ import { SettingsView } from "@/components/SettingsView";
 import { Stepper, type StepDef } from "@/components/Stepper";
 import { activeModelLabel } from "@/lib/aiSettings";
 import { readJobFromUrl } from "@/lib/handoff";
-import { storage } from "@/lib/storage";
+import { applicationId, storage } from "@/lib/storage";
 import type { ApplicationRecord, Job, MatchResult, ParsedJob, Profile } from "@/lib/types";
 
 const STEPS: StepDef[] = [
@@ -50,12 +50,25 @@ export default function HomePage() {
         // Reuse the score the extension already computed, so the web app shows
         // the SAME number (no re-scoring wobble, no extra AI call). Land on the
         // Match step so the user sees it before generating.
-        if (incoming.match) setMatch(incoming.match);
+        if (incoming.match) {
+          setMatch(incoming.match);
+          // Persist it so a refresh restores the score instead of re-scoring.
+          storage.saveMatch(applicationId(incoming.job), {
+            parsed: null,
+            match: incoming.match,
+          });
+        }
         setStep(p ? 2 : 0);
         return;
       }
       const j = storage.loadJob();
-      if (j) setJobState(j);
+      if (j) {
+        setJobState(j);
+        // Restore a previously computed match for this job (survives refresh).
+        const cached = storage.loadMatch(applicationId(j));
+        if (cached?.parsed) setParsed(cached.parsed);
+        if (cached?.match) setMatch(cached.match);
+      }
     })();
   }, []);
 
@@ -151,64 +164,55 @@ export default function HomePage() {
       ) : view === "settings" ? (
         <SettingsView onSaved={() => setAiLabel(activeModelLabel())} />
       ) : (
-      <>
-      <div className="mb-6">
-        <Stepper
-          steps={STEPS}
-          current={step}
-          maxReached={maxReached}
-          onSelect={go}
-        />
-      </div>
+        <>
+          <div className="mb-6">
+            <Stepper steps={STEPS} current={step} maxReached={maxReached} onSelect={go} />
+          </div>
 
-      {step === 0 && (
-        <ProfileStep
-          profile={profile}
-          onChange={setProfile}
-          onNext={() => setStep(1)}
-        />
-      )}
+          {step === 0 && (
+            <ProfileStep profile={profile} onChange={setProfile} onNext={() => setStep(1)} />
+          )}
 
-      {step === 1 && (
-        <JobStep
-          job={job}
-          onChange={setJob}
-          onBack={() => setStep(0)}
-          onNext={() => setStep(2)}
-        />
-      )}
+          {step === 1 && (
+            <JobStep
+              job={job}
+              onChange={setJob}
+              onBack={() => setStep(0)}
+              onNext={() => setStep(2)}
+            />
+          )}
 
-      {step === 2 && profile && (
-        <MatchStep
-          profile={profile}
-          job={job}
-          match={match}
-          onResult={(p, m) => {
-            setParsed(p);
-            setMatch(m);
-          }}
-          onBack={() => setStep(1)}
-          onNext={() => setStep(3)}
-          onTrackerChange={setApplications}
-        />
-      )}
+          {step === 2 && profile && (
+            <MatchStep
+              profile={profile}
+              job={job}
+              match={match}
+              onResult={(p, m) => {
+                setParsed(p);
+                setMatch(m);
+              }}
+              onBack={() => setStep(1)}
+              onNext={() => setStep(3)}
+              onTrackerChange={setApplications}
+            />
+          )}
 
-      {step === 3 && profile && (
-        <GenerateStep
-          profile={profile}
-          job={job}
-          parsed={parsed}
-          match={match}
-          onBack={() => setStep(2)}
-          onTrackerChange={setApplications}
-        />
-      )}
-      </>
+          {step === 3 && profile && (
+            <GenerateStep
+              profile={profile}
+              job={job}
+              parsed={parsed}
+              match={match}
+              onBack={() => setStep(2)}
+              onTrackerChange={setApplications}
+            />
+          )}
+        </>
       )}
 
       <footer className="mt-12 text-center text-xs text-slate-600">
-        Pure generation · no scraping or automation. Your profile stays in this
-        browser. Set <code className="text-slate-400">GEMINI_API_KEY</code> in{" "}
+        Pure generation · no scraping or automation. Your profile stays in this browser. Set{" "}
+        <code className="text-slate-400">GEMINI_API_KEY</code> in{" "}
         <code className="text-slate-400">apps/web/.env.local</code>.
       </footer>
     </main>

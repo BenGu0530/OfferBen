@@ -40,7 +40,11 @@ declare global {
           initTokenClient: (cfg: {
             client_id: string;
             scope: string;
-            callback: (resp: { access_token?: string; error?: string }) => void;
+            callback: (resp: {
+              access_token?: string;
+              error?: string;
+              expires_in?: number;
+            }) => void;
             error_callback?: (err: { type?: string; message?: string }) => void;
           }) => TokenClient;
         };
@@ -68,11 +72,27 @@ function loadGis(): Promise<void> {
 }
 
 let cachedToken: string | null = null;
+// GIS access tokens live ~3600s. Track when ours goes stale so we proactively
+// re-request instead of firing doomed calls with an expired token.
+let tokenExpiresAt = 0;
+
+interface TokenResponse {
+  access_token?: string;
+  error?: string;
+  expires_in?: number;
+}
+
+/** Drop the cached token so the next getToken() re-prompts GIS for a fresh one. */
+function clearToken(): void {
+  cachedToken = null;
+  tokenExpiresAt = 0;
+}
 
 /** Acquire a `drive.file` access token, prompting the user to sign in once. */
 async function getToken(): Promise<string> {
   if (!driveEnabled()) throw new Error("Google Drive sync is not configured.");
-  if (cachedToken) return cachedToken;
+  if (cachedToken && Date.now() < tokenExpiresAt) return cachedToken;
+  clearToken();
   await loadGis();
 
   return new Promise<string>((resolve, reject) => {
@@ -80,14 +100,20 @@ async function getToken(): Promise<string> {
     const client = window.google!.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: SCOPE,
-      callback: (resp) => {
+      callback: (resp: TokenResponse) => {
         if (settled) return;
         settled = true;
         if (resp.error || !resp.access_token) {
-          reject(new Error("Google sign-in failed. Add your email as a Test user on the OAuth consent screen."));
+          reject(
+            new Error(
+              "Google sign-in failed. Add your email as a Test user on the OAuth consent screen.",
+            ),
+          );
           return;
         }
         cachedToken = resp.access_token;
+        // 60s safety margin so we refresh slightly before the real expiry.
+        tokenExpiresAt = Date.now() + (resp.expires_in ?? 3600) * 1000 - 60_000;
         resolve(resp.access_token);
       },
       // Fires when the popup is closed/blocked or access is denied. Without this
@@ -115,10 +141,37 @@ export async function getDriveToken(): Promise<string> {
 
 // --- Drive REST ------------------------------------------------------------
 
-async function findFileId(auth: { Authorization: string }): Promise<string | null> {
+/**
+ * Authenticated fetch to the Drive API. Injects the current access token and,
+ * because GIS tokens expire (~1h), transparently retries ONCE on a 401 with a
+ * freshly minted token. If it still 401s, the session is genuinely dead → ask
+ * the user to reconnect. Every Drive call goes through here so the retry lives
+ * in one place.
+ */
+async function driveFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const attempt = async () => {
+    const token = await getToken();
+    return fetch(url, {
+      ...init,
+      headers: { ...(init.headers || {}), Authorization: `Bearer ${token}` },
+    });
+  };
+
+  let res = await attempt();
+  if (res.status === 401) {
+    clearToken();
+    res = await attempt();
+    if (res.status === 401) {
+      throw new Error("Drive auth expired — reconnect.");
+    }
+  }
+  return res;
+}
+
+async function findFileId(): Promise<string | null> {
   const q = encodeURIComponent(`name='${FILE_NAME}' and trashed=false`);
   const url = `${FILES}?q=${q}&spaces=drive&fields=files(id)&orderBy=modifiedTime desc`;
-  const res = await fetch(url, { headers: auth });
+  const res = await driveFetch(url);
   if (!res.ok) throw new Error(`Drive list failed (${res.status}).`);
   const body = (await res.json()) as { files?: Array<{ id: string }> };
   return body.files?.[0]?.id ?? null;
@@ -130,13 +183,12 @@ export type OnStatus = (msg: string) => void;
 /** Pull the stored AppData from the user's Drive, or null if none exists yet. */
 export async function loadFromDrive(onStatus?: OnStatus): Promise<AppData | null> {
   onStatus?.("Signing in to Google…");
-  const token = await getToken();
-  const auth = { Authorization: `Bearer ${token}` };
+  await getToken();
   onStatus?.("Looking for your data…");
-  const id = await findFileId(auth);
+  const id = await findFileId();
   if (!id) return null;
   onStatus?.("Downloading…");
-  const res = await fetch(`${FILES}/${id}?alt=media`, { headers: auth });
+  const res = await driveFetch(`${FILES}/${id}?alt=media`);
   if (!res.ok) throw new Error(`Drive download failed (${res.status}).`);
   const text = await res.text();
   if (!text.trim()) return null;
@@ -148,16 +200,15 @@ export async function loadFromDrive(onStatus?: OnStatus): Promise<AppData | null
 /** Push AppData to the user's Drive (create or overwrite the app's file). */
 export async function saveToDrive(data: AppData, onStatus?: OnStatus): Promise<void> {
   onStatus?.("Signing in to Google…");
-  const token = await getToken();
-  const auth = { Authorization: `Bearer ${token}` };
+  await getToken();
   onStatus?.("Uploading to Drive…");
-  const id = await findFileId(auth);
+  const id = await findFileId();
   const content = JSON.stringify(data, null, 2);
 
   if (id) {
-    const res = await fetch(`${UPLOAD}/${id}?uploadType=media`, {
+    const res = await driveFetch(`${UPLOAD}/${id}?uploadType=media`, {
       method: "PATCH",
-      headers: { ...auth, "Content-Type": MIME },
+      headers: { "Content-Type": MIME },
       body: content,
     });
     if (!res.ok) throw new Error(`Drive update failed (${res.status}).`);
@@ -173,9 +224,9 @@ export async function saveToDrive(data: AppData, onStatus?: OnStatus): Promise<v
     `Content-Type: ${MIME}\r\n\r\n` +
     `${content}\r\n` +
     `--${boundary}--`;
-  const res = await fetch(`${UPLOAD}?uploadType=multipart`, {
+  const res = await driveFetch(`${UPLOAD}?uploadType=multipart`, {
     method: "POST",
-    headers: { ...auth, "Content-Type": `multipart/related; boundary=${boundary}` },
+    headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
     body,
   });
   if (!res.ok) throw new Error(`Drive create failed (${res.status}).`);
@@ -190,39 +241,39 @@ const FOLDER_MIME = "application/vnd.google-apps.folder";
 const MD_MIME = "text/markdown";
 let cachedFolderId: string | null = null;
 
-async function findOrCreateFolder(
-  auth: { Authorization: string },
-  name: string,
-  parentId?: string,
-): Promise<string> {
+async function findOrCreateFolder(name: string, parentId?: string): Promise<string> {
   const parent = parentId ? ` and '${parentId}' in parents` : "";
   const q = encodeURIComponent(
     `name='${name}' and mimeType='${FOLDER_MIME}' and trashed=false${parent}`,
   );
-  const found = await fetch(`${FILES}?q=${q}&spaces=drive&fields=files(id)`, { headers: auth });
+  const found = await driveFetch(`${FILES}?q=${q}&spaces=drive&fields=files(id)`);
   if (found.ok) {
     const body = (await found.json()) as { files?: Array<{ id: string }> };
     if (body.files?.[0]?.id) return body.files[0].id;
   }
   const meta = { name, mimeType: FOLDER_MIME, ...(parentId ? { parents: [parentId] } : {}) };
-  const made = await fetch(`${FILES}?fields=id`, {
+  const made = await driveFetch(`${FILES}?fields=id`, {
     method: "POST",
-    headers: { ...auth, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(meta),
   });
   if (!made.ok) throw new Error(`Drive folder create failed (${made.status}).`);
   return ((await made.json()) as { id: string }).id;
 }
 
-async function appFolderId(auth: { Authorization: string }): Promise<string> {
+async function appFolderId(): Promise<string> {
   if (cachedFolderId) return cachedFolderId;
-  const root = await findOrCreateFolder(auth, "OfferBen");
-  cachedFolderId = await findOrCreateFolder(auth, "applications", root);
+  const root = await findOrCreateFolder("OfferBen");
+  cachedFolderId = await findOrCreateFolder("applications", root);
   return cachedFolderId;
 }
 
 function safeName(s: string): string {
-  return (s || "").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+  return (s || "")
+    .replace(/[\\/:*?"<>|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
 }
 
 export interface SavedDoc {
@@ -240,23 +291,25 @@ export async function saveApplicationToDrive(
   onStatus?: OnStatus,
 ): Promise<SavedDoc> {
   onStatus?.("Signing in to Google…");
-  const token = await getToken();
-  const auth = { Authorization: `Bearer ${token}` };
+  await getToken();
 
   if (opts.fileId) {
     onStatus?.("Saving to Drive…");
-    const res = await fetch(`${UPLOAD}/${opts.fileId}?uploadType=media&fields=id,webViewLink`, {
-      method: "PATCH",
-      headers: { ...auth, "Content-Type": MD_MIME },
-      body: opts.markdown,
-    });
+    const res = await driveFetch(
+      `${UPLOAD}/${opts.fileId}?uploadType=media&fields=id,webViewLink`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": MD_MIME },
+        body: opts.markdown,
+      },
+    );
     if (!res.ok) throw new Error(`Drive update failed (${res.status}).`);
     const b = (await res.json()) as { id: string; webViewLink?: string };
     return { fileId: b.id, url: b.webViewLink };
   }
 
   onStatus?.("Creating the file in your Drive…");
-  const folderId = await appFolderId(auth);
+  const folderId = await appFolderId();
   const name = `${safeName(opts.company) || "Company"} — ${safeName(opts.title) || "Role"}.md`;
   const boundary = "offerben-doc-7e3b";
   const body =
@@ -267,9 +320,9 @@ export async function saveApplicationToDrive(
     `Content-Type: ${MD_MIME}\r\n\r\n` +
     `${opts.markdown}\r\n` +
     `--${boundary}--`;
-  const res = await fetch(`${UPLOAD}?uploadType=multipart&fields=id,webViewLink`, {
+  const res = await driveFetch(`${UPLOAD}?uploadType=multipart&fields=id,webViewLink`, {
     method: "POST",
-    headers: { ...auth, "Content-Type": `multipart/related; boundary=${boundary}` },
+    headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
     body,
   });
   if (!res.ok) throw new Error(`Drive create failed (${res.status}).`);

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { api } from "@/lib/client";
 import { driveEnabled, saveApplicationToDrive } from "@/lib/drive";
 import { profileToLatex } from "@/lib/latex";
-import { storage } from "@/lib/storage";
+import { applicationId, storage } from "@/lib/storage";
 import type {
   ApplicationRecord,
   DroppedItem,
@@ -36,10 +36,12 @@ function buildMarkdown(
   if (match) {
     L.push(`- Match: ${match.score}/100 — ${match.verdict}`);
     if (match.summary) L.push("", match.summary);
-    if (match.matchedKeywords?.length) L.push("", `**Matched:** ${match.matchedKeywords.join(", ")}`);
+    if (match.matchedKeywords?.length)
+      L.push("", `**Matched:** ${match.matchedKeywords.join(", ")}`);
     if (match.missingKeywords?.length) L.push(`**Missing:** ${match.missingKeywords.join(", ")}`);
   }
-  if (tailored?.emphasis?.length) L.push("", "## Tailored resume — emphasis", tailored.emphasis.join(", "));
+  if (tailored?.emphasis?.length)
+    L.push("", "## Tailored resume — emphasis", tailored.emphasis.join(", "));
   if (tailored?.changeNotes?.length)
     L.push("", "## What changed", ...tailored.changeNotes.map((n) => `- ${n}`));
   const letterTitles: Record<string, string> = {
@@ -75,7 +77,11 @@ type LetterKey = "coverLetter" | "recruiterEmail" | "referralNote";
 
 const LETTER_CARDS: { key: LetterKey; title: string; desc: string }[] = [
   { key: "coverLetter", title: "Cover letter", desc: "Tailored, ~300 words." },
-  { key: "recruiterEmail", title: "Recruiter email", desc: "Short cold outreach with a subject line." },
+  {
+    key: "recruiterEmail",
+    title: "Recruiter email",
+    desc: "Short cold outreach with a subject line.",
+  },
   { key: "referralNote", title: "Referral note", desc: "LinkedIn DM asking for a referral." },
 ];
 
@@ -160,7 +166,7 @@ export function GenerateStep({
     setDriveBusy(true);
     setDriveMsg("Saving…");
     try {
-      const id = job.url || `${job.company}::${job.title}`;
+      const id = applicationId(job);
       const existing = storage.loadApplications().find((a) => a.id === id);
       const markdown = buildMarkdown(job, match, tailored, letters, qa, prep);
       const saved = await saveApplicationToDrive(
@@ -310,7 +316,9 @@ export function GenerateStep({
     setCurated((c) => {
       if (!c) return c;
       const present = new Set(c.projects.map((p) => p.name));
-      const item = profile.projects.find((p) => titleMatches(title, p.name) && !present.has(p.name));
+      const item = profile.projects.find(
+        (p) => titleMatches(title, p.name) && !present.has(p.name),
+      );
       return item ? { ...c, projects: [...c.projects, item] } : c;
     });
   }
@@ -326,9 +334,9 @@ export function GenerateStep({
         {!tailored ? (
           <div className="space-y-3">
             <p className="text-sm text-slate-400">
-              <b>Curates</b> your resume for this job — selects the most relevant
-              experiences & projects, drops the ones that don&apos;t help, orders
-              the strongest first, and rewords. Never fabricates.
+              <b>Curates</b> your resume for this job — selects the most relevant experiences &
+              projects, drops the ones that don&apos;t help, orders the strongest first, and
+              rewords. Never fabricates.
             </p>
             <div className="flex items-center gap-2">
               <span className="label mb-0">Length</span>
@@ -336,7 +344,11 @@ export function GenerateStep({
                 <button
                   key={n}
                   type="button"
-                  className={pageTarget === n ? "btn-primary px-3 py-1 text-xs" : "btn-ghost px-3 py-1 text-xs"}
+                  className={
+                    pageTarget === n
+                      ? "btn-primary px-3 py-1 text-xs"
+                      : "btn-ghost px-3 py-1 text-xs"
+                  }
                   onClick={() => setPageTarget(n)}
                 >
                   {n} page{n > 1 ? "s" : ""}
@@ -371,11 +383,21 @@ export function GenerateStep({
             />
 
             <div className="flex flex-wrap items-center gap-2">
-              <ResumeDownloadButton profile={resumeProfile} pageTarget={pageTarget} fileName={fileName} />
+              <ResumeDownloadButton
+                profile={resumeProfile}
+                pageTarget={pageTarget}
+                fileName={fileName}
+              />
               <button
                 type="button"
                 className="btn-ghost"
-                onClick={() => downloadText(profileToLatex(resumeProfile, { pageTarget }), `${sanitize(profile.basics.name)}_resume.tex`, "application/x-tex")}
+                onClick={() =>
+                  downloadText(
+                    profileToLatex(resumeProfile, { pageTarget }),
+                    `${sanitize(profile.basics.name)}_resume.tex`,
+                    "application/x-tex",
+                  )
+                }
               >
                 Download .tex
               </button>
@@ -476,9 +498,7 @@ export function GenerateStep({
               <div className="max-h-64 space-y-3 overflow-auto pr-1 scroll-thin">
                 {qa.items.map((item, i) => (
                   <div key={i}>
-                    <div className="text-sm font-medium text-white">
-                      {item.question}
-                    </div>
+                    <div className="text-sm font-medium text-white">{item.question}</div>
                     <div className="text-sm text-slate-300">{item.answer}</div>
                   </div>
                 ))}
@@ -494,12 +514,7 @@ export function GenerateStep({
             </div>
           ) : (
             <div className="space-y-2">
-              <button
-                type="button"
-                className="btn-ghost"
-                disabled={loading.qa}
-                onClick={runQA}
-              >
+              <button type="button" className="btn-ghost" disabled={loading.qa} onClick={runQA}>
                 {loading.qa ? <Spinner /> : null}
                 {loading.qa ? "Drafting…" : "Generate referral Q&A"}
               </button>
@@ -517,10 +532,14 @@ export function GenerateStep({
                 {prep.items.map((item, i) => (
                   <div key={i}>
                     <div className="flex items-center gap-2">
-                      <Chip tone={item.type === "technical" ? "brand" : "neutral"}>{item.type}</Chip>
+                      <Chip tone={item.type === "technical" ? "brand" : "neutral"}>
+                        {item.type}
+                      </Chip>
                       <span className="text-sm font-medium text-white">{item.question}</span>
                     </div>
-                    <div className="mt-1 whitespace-pre-wrap text-sm text-slate-300">{item.answer}</div>
+                    <div className="mt-1 whitespace-pre-wrap text-sm text-slate-300">
+                      {item.answer}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -567,7 +586,11 @@ export function GenerateStep({
               className="btn-primary"
               disabled={driveBusy || !hasContent}
               onClick={saveToDrive}
-              title={hasContent ? "Save this application to My Drive/OfferBen" : "Generate something first"}
+              title={
+                hasContent
+                  ? "Save this application to My Drive/OfferBen"
+                  : "Generate something first"
+              }
             >
               {driveBusy ? <Spinner /> : null} Save to Drive
             </button>
@@ -578,19 +601,22 @@ export function GenerateStep({
   );
 }
 
-function workKey(w: { position?: string; name?: string; startDate?: string; endDate?: string }): string {
+function workKey(w: {
+  position?: string | null;
+  name?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+}): string {
   return [w.position, w.name, w.startDate, w.endDate].join("|");
 }
 
-function titleMatches(title: string, ...fields: (string | undefined)[]): boolean {
+function titleMatches(title: string, ...fields: (string | null | undefined)[]): boolean {
   const t = (title || "").toLowerCase().trim();
   if (!t) return false;
-  return fields
-    .filter(Boolean)
-    .some((f) => {
-      const x = (f as string).toLowerCase().trim();
-      return x.length > 1 && (t.includes(x) || x.includes(t));
-    });
+  return fields.filter(Boolean).some((f) => {
+    const x = (f as string).toLowerCase().trim();
+    return x.length > 1 && (t.includes(x) || x.includes(t));
+  });
 }
 
 function CurationEditor({
@@ -623,7 +649,8 @@ function CurationEditor({
   // re-addable here — other kinds (publications/awards trimmed for space) are
   // shown as info elsewhere, not in the add-back list.
   const stillDropped = dropped.filter((d) => {
-    if (d.kind === "work") return !profile.work.some((w) => titleMatches(d.title, w.position, w.name));
+    if (d.kind === "work")
+      return !profile.work.some((w) => titleMatches(d.title, w.position, w.name));
     if (d.kind === "project") return !profile.projects.some((p) => titleMatches(d.title, p.name));
     return false;
   });
@@ -636,7 +663,11 @@ function CurationEditor({
       <div className="flex items-center justify-between">
         <span className="text-xs text-slate-400">
           Estimated length:{" "}
-          <span className={overTarget ? "font-semibold text-amber-300" : "font-semibold text-emerald-300"}>
+          <span
+            className={
+              overTarget ? "font-semibold text-amber-300" : "font-semibold text-emerald-300"
+            }
+          >
             ≈ {est.toFixed(1)} page{est >= 1.05 ? "s" : ""}
           </span>{" "}
           (target {pageTarget})
@@ -698,8 +729,8 @@ function CurationEditor({
       ) : null}
 
       <p className="text-xs text-slate-500">
-        Drag (or ↑/↓) to reorder, ✕ to remove, “Add back” to re-include — the PDF updates
-        instantly (no AI call). Download for the full formatted, ATS-safe resume.
+        Drag (or ↑/↓) to reorder, ✕ to remove, “Add back” to re-include — the PDF updates instantly
+        (no AI call). Download for the full formatted, ATS-safe resume.
       </p>
     </div>
   );

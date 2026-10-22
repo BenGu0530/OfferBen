@@ -4,8 +4,7 @@
 // app-created file. Auth goes through chrome.identity.launchWebAuthFlow (works
 // without bundling, reuses the web OAuth client id).
 
-const CLIENT_ID =
-  "972671167903-f9mjvi26sbq9eb6jenk4upokenhak2r9.apps.googleusercontent.com";
+const CLIENT_ID = "972671167903-f9mjvi26sbq9eb6jenk4upokenhak2r9.apps.googleusercontent.com";
 const SCOPE = "https://www.googleapis.com/auth/drive.file";
 const FILE_NAME = "offerben-data.json";
 const FILES = "https://www.googleapis.com/drive/v3/files";
@@ -24,7 +23,28 @@ async function getToken(interactive = true) {
     `&redirect_uri=${encodeURIComponent(redirectUri())}` +
     `&scope=${encodeURIComponent(SCOPE)}`;
 
-  const redirect = await chrome.identity.launchWebAuthFlow({ url, interactive });
+  let redirect;
+  try {
+    redirect = await chrome.identity.launchWebAuthFlow({ url, interactive });
+  } catch (err) {
+    // A redirect_uri_mismatch means this (unpacked) extension's ID isn't the one
+    // the OAuth client was configured for — almost always because the ID isn't
+    // pinned. Make that self-documenting instead of surfacing Google's raw error.
+    const msg = (err && err.message) || String(err || "");
+    if (/redirect_uri_mismatch/i.test(msg)) {
+      throw new Error(
+        "Drive connect failed: this extension's ID isn't authorized. See README 'Pinning the extension ID'.",
+        { cause: err },
+      );
+    }
+    throw err;
+  }
+  // Google can also hand the error back in the redirect URL rather than rejecting.
+  if (/redirect_uri_mismatch/i.test(redirect || "")) {
+    throw new Error(
+      "Drive connect failed: this extension's ID isn't authorized. See README 'Pinning the extension ID'.",
+    );
+  }
   // Token comes back in the URL fragment: ...#access_token=...&expires_in=...
   const frag = (redirect || "").split("#")[1] || "";
   const token = new URLSearchParams(frag).get("access_token");
@@ -48,7 +68,10 @@ async function findFileId(token) {
 async function connectDrive() {
   const token = await getToken(true);
   const id = await findFileId(token);
-  if (!id) throw new Error("No OfferBen data in Drive yet. In the web app, build your profile and click “Drive ↑”.");
+  if (!id)
+    throw new Error(
+      "No OfferBen data in Drive yet. In the web app, build your profile and click “Drive ↑”.",
+    );
   const res = await fetch(`${FILES}/${id}?alt=media`, {
     headers: { Authorization: `Bearer ${token}` },
   });

@@ -21,6 +21,16 @@ const STATUS_TONE: Record<ApplicationStatus, string> = {
   offer: "text-emerald-300",
 };
 
+function safeHref(u?: string): string | undefined {
+  if (!u) return undefined;
+  try {
+    const p = new URL(u, "http://x");
+    return p.protocol === "http:" || p.protocol === "https:" ? u : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function scoreColor(score?: number): string {
   if (score == null) return "border-white/15 text-slate-400";
   if (score >= 75) return "border-emerald-500/40 text-emerald-300";
@@ -36,9 +46,7 @@ export function ApplicationsView({
   onChange: (list: ApplicationRecord[]) => void;
 }) {
   function setStatus(rec: ApplicationRecord, status: ApplicationStatus) {
-    onChange(
-      storage.saveApplication({ ...rec, status, updatedAt: new Date().toISOString() }),
-    );
+    onChange(storage.saveApplication({ ...rec, status, updatedAt: new Date().toISOString() }));
   }
   function remove(id: string) {
     onChange(storage.removeApplication(id));
@@ -50,8 +58,8 @@ export function ApplicationsView({
 
       {applications.length === 0 ? (
         <p className="py-8 text-center text-sm text-slate-500">
-          No applications yet. Run a match and click <b>Save to tracker</b> to start
-          building your history.
+          No applications yet. Run a match and click <b>Save to tracker</b> to start building your
+          history.
         </p>
       ) : (
         <ul className="divide-y divide-white/5">
@@ -66,8 +74,13 @@ export function ApplicationsView({
 
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium text-white">
-                  {a.url ? (
-                    <a href={a.url} target="_blank" rel="noreferrer" className="hover:underline">
+                  {safeHref(a.url) ? (
+                    <a
+                      href={safeHref(a.url)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="hover:underline"
+                    >
                       {a.title || "Untitled role"}
                     </a>
                   ) : (

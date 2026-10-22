@@ -13,6 +13,11 @@ interface Body {
 
 export const POST = jsonHandler<Body>(async (body, req) => {
   if (!body.imageBase64) throw new Error("No screenshot provided.");
+  // Bound the payload so a malicious/oversized image can't exhaust memory.
+  // 12M base64 chars ≈ 9MB decoded.
+  if (typeof body.imageBase64 !== "string" || body.imageBase64.length > 12_000_000) {
+    throw new Error("Image too large or missing.");
+  }
   const ai = createAIProvider(aiConfigFromHeaders(req));
   const job = await extractJobFromImage(ai, {
     mimeType: body.mimeType || "image/png",

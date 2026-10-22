@@ -29,8 +29,7 @@ export function ProfileStep({
       let payload: { text?: string; fileBase64?: string; mimeType?: string } = {};
       if (pendingFile) {
         const isPdf =
-          pendingFile.type === "application/pdf" ||
-          pendingFile.name.toLowerCase().endsWith(".pdf");
+          pendingFile.type === "application/pdf" || pendingFile.name.toLowerCase().endsWith(".pdf");
         if (isPdf) {
           payload = {
             fileBase64: await fileToBase64(pendingFile),
@@ -62,7 +61,12 @@ export function ProfileStep({
       const payload =
         f.mimeType === "application/pdf"
           ? { fileBase64: f.base64, mimeType: "application/pdf" }
-          : { text: atob(f.base64) };
+          : {
+              // Decode as UTF-8, not latin-1 — bare atob() mojibakes é/ü/etc.
+              text: new TextDecoder().decode(
+                Uint8Array.from(atob(f.base64), (c) => c.charCodeAt(0)),
+              ),
+            };
       const { profile: p } = await api.extractProfile(payload);
       onChange(p);
     } catch (err) {
@@ -77,8 +81,8 @@ export function ProfileStep({
       <div className="card p-5">
         <SectionTitle hint="One-time setup">Build your profile</SectionTitle>
         <p className="mb-4 text-sm text-slate-400">
-          Upload a resume PDF or your LinkedIn data export (or paste the text). AI
-          extracts a structured profile you can reuse for every application.
+          Upload a resume PDF or your LinkedIn data export (or paste the text). AI extracts a
+          structured profile you can reuse for every application.
         </p>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -129,12 +133,7 @@ export function ProfileStep({
         </div>
 
         <div className="mt-4 flex items-center gap-3">
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={loading}
-            onClick={handleExtract}
-          >
+          <button type="button" className="btn-primary" disabled={loading} onClick={handleExtract}>
             {loading ? <Spinner /> : null}
             {loading ? "Extracting…" : "Extract profile"}
           </button>
@@ -142,9 +141,7 @@ export function ProfileStep({
         </div>
       </div>
 
-      {profile ? (
-        <ProfileCard profile={profile} onChange={onChange} onNext={onNext} />
-      ) : null}
+      {profile ? <ProfileCard profile={profile} onChange={onChange} onNext={onNext} /> : null}
     </div>
   );
 }
@@ -226,7 +223,12 @@ function ProfileEditor({
     <div className="space-y-4 text-sm">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Name" value={name} onChange={setName} />
-        <Field label="Headline" value={label} onChange={setLabel} placeholder="e.g. Robotics MS @ CMU" />
+        <Field
+          label="Headline"
+          value={label}
+          onChange={setLabel}
+          placeholder="e.g. Robotics MS @ CMU"
+        />
         <Field label="Email" value={email} onChange={setEmail} />
         <Field label="Phone" value={phone} onChange={setPhone} />
       </div>
@@ -286,9 +288,7 @@ function ProfilePreview({ profile }: { profile: Profile }) {
   return (
     <div className="space-y-4 text-sm">
       <div>
-        <div className="text-base font-semibold text-white">
-          {b.name || "Unnamed"}
-        </div>
+        <div className="text-base font-semibold text-white">{b.name || "Unnamed"}</div>
         {b.label ? <div className="text-slate-300">{b.label}</div> : null}
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400">
           {b.email ? <span>{b.email}</span> : null}
