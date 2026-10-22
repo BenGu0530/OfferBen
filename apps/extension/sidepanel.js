@@ -22,6 +22,9 @@ const els = {
   genStatus: document.getElementById("gen-status"),
   genOut: document.getElementById("gen-out"),
   genCopy: document.getElementById("gen-copy"),
+  genPdf: document.getElementById("gen-pdf"),
+  genActions: document.getElementById("gen-actions"),
+  genSource: document.getElementById("gen-source"),
   ansWorkauth: document.getElementById("ans-workauth"),
   ansSponsor: document.getElementById("ans-sponsor"),
   ansEeo: document.getElementById("ans-eeo"),
@@ -32,9 +35,38 @@ let currentJob = null; // last successfully read job
 let lastUrl = null;
 let autoScore = false; // off by default: don't spend AI on every page you open
 let matchCache = {}; // url -> { job, match } so revisits cost 0 API calls
+let inFlightUrl = null; // url a run()/previewJob scoring request is in flight for
+
+let lastLetter = null; // { kind, text } — what Copy / Save PDF act on
+let companyCache = {}; // company (lowercased) -> { at, brief }, so re-applying costs 0 AI calls
 
 const CACHE_KEY = "matchCache";
 const CACHE_MAX = 40;
+const COMPANY_CACHE_KEY = "companyCache";
+const COMPANY_CACHE_MAX = 60;
+const COMPANY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Normalize a URL into a stable cache key: drop the fragment and tracking params
+// so the same posting reached via different links shares one cache entry (and so
+// an in-flight result lands under the same key a revisit will read from).
+function cacheKey(u) {
+  try {
+    const p = new URL(u);
+    p.hash = "";
+    [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+      "gh_src",
+      "gh_jid",
+    ].forEach((k) => p.searchParams.delete(k));
+    return p.toString();
+  } catch {
+    return u;
+  }
+}
 
 async function loadCache() {
   const s = await chrome.storage.local.get(CACHE_KEY);
@@ -81,8 +113,7 @@ function chip(text) {
 function renderMatch(match) {
   const score = Math.round(match.score ?? 0);
   els.score.textContent = String(score);
-  els.score.className =
-    "score " + (score >= 70 ? "good" : score >= 45 ? "ok" : "low");
+  els.score.className = "score " + (score >= 70 ? "good" : score >= 45 ? "ok" : "low");
   els.verdict.textContent = match.verdict || "";
   els.summary.textContent = match.summary || "";
 
@@ -133,7 +164,10 @@ function toggleImportBtn(showIt) {
 function readProfileTextInPage() {
   const main = document.querySelector("main");
   const text = (main || document.body).innerText || "";
-  return text.replace(/\n{3,}/g, "\n\n").trim().slice(0, 24000);
+  return text
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, 24000);
 }
 
 // Import the LinkedIn profile the user is viewing -> structured profile, via the
@@ -150,7 +184,8 @@ async function importLinkedIn() {
       func: readProfileTextInPage,
     });
     const text = (inj && inj.result) || "";
-    if (text.length < 200) throw new Error("Couldn't read the profile. Scroll to load it, then retry.");
+    if (text.length < 200)
+      throw new Error("Couldn't read the profile. Scroll to load it, then retry.");
 
     setStatus("Extracting your profile…");
     const res = await fetch(`${appUrl.replace(/\/+$/, "")}/api/profile/extract`, {
@@ -164,7 +199,9 @@ async function importLinkedIn() {
     await chrome.storage.local.set({ profile: data.profile, profileSyncedAt: Date.now() });
     const b = data.profile.basics || {};
     const n = (data.profile.work || []).length;
-    setStatus(`✓ Imported ${b.name || "your profile"} (${n} role${n === 1 ? "" : "s"}). It's now your scoring profile.`);
+    setStatus(
+      `✓ Imported ${b.name || "your profile"} (${n} role${n === 1 ? "" : "s"}). It's now your scoring profile.`,
+    );
   } catch (err) {
     setStatus(err && err.message ? err.message : "Import failed.", true);
     toggleImportBtn(true);
@@ -174,7 +211,7 @@ async function importLinkedIn() {
 // Read the JD off the current page (silent: no error flash while just browsing).
 // allowVision: if DOM parsing fails, fall back to a screenshot + vision model.
 // Gated to explicit actions (open / ⟳) so silent navigations don't burn quota.
-async function readJob({ silent = false, allowVision = false } = {}) {
+async function readJob({ silent = false, allowVision = false, forUrl = null } = {}) {
   const tab = await getActiveTab();
   if (!tab || !tab.id || isUninjectable(tab.url)) {
     if (!silent) setStatus("Open a job posting in your browser — I can't read this page.");
@@ -200,6 +237,14 @@ async function readJob({ silent = false, allowVision = false } = {}) {
     try {
       setStatus("Reading the page from a screenshot…");
       const dataUrl = await chrome.tabs.captureVisibleTab({ format: "png" });
+      // captureVisibleTab grabs whatever tab is visible RIGHT NOW. If the user
+      // switched tabs since we started, the screenshot is of the wrong page —
+      // abort before we spend an AI call (and mis-attribute the result).
+      const nowActive = await getActiveTab();
+      const nowUrl = (nowActive && nowActive.url) || "";
+      if (nowUrl !== tab.url || (forUrl != null && nowUrl !== forUrl)) {
+        return null;
+      }
       const res = await fetch(`${appUrl.replace(/\/+$/, "")}/api/capture`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -242,17 +287,22 @@ async function run({ silent = false, force = false } = {}) {
     }
 
     // Cache hit: render instantly, spend 0 API calls.
-    if (!force && url && matchCache[url]) {
+    const key = cacheKey(url);
+    if (!force && key && matchCache[key]) {
       lastUrl = url;
-      currentJob = matchCache[url].job;
+      currentJob = matchCache[key].job;
       setJobLine(currentJob);
-      renderMatch(matchCache[url].match);
+      renderMatch(matchCache[key].match);
       return;
     }
 
     const profile = await getCachedProfile();
-    const job = await readJob({ silent, allowVision: force || !silent });
+    const job = await readJob({ silent, allowVision: force || !silent, forUrl: url });
     if (!job) return;
+
+    // readJob (vision path) may have detected the active tab moved on. Bail
+    // rather than paint job A's read onto job B.
+    if (lastUrl !== url) return;
 
     currentJob = job;
     setJobLine(job);
@@ -263,19 +313,26 @@ async function run({ silent = false, force = false } = {}) {
     }
 
     setStatus(`Scoring against your profile…`);
+    inFlightUrl = url;
     const res = await fetch(`${appUrl.replace(/\/+$/, "")}/api/match`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ profile, job }),
     });
     const data = await res.json().catch(() => ({}));
+    if (inFlightUrl === url) inFlightUrl = null;
     if (!res.ok) throw new Error(data.error || `Match failed (${res.status}).`);
-    renderMatch(data.match);
 
-    if (lastUrl) {
-      matchCache[lastUrl] = { job, match: data.match };
-      void saveCache();
-    }
+    // Always cache under THIS request's own url (normalized), even if the user
+    // has since switched tabs — the result is correct for `url`.
+    matchCache[key] = { job, match: data.match };
+    void saveCache();
+
+    // But only paint the panel if `url` is still the active tab. If the user
+    // switched tabs while this was in flight, rendering would show job A's score
+    // on job B.
+    if (lastUrl !== url) return;
+    renderMatch(data.match);
   } catch (err) {
     setStatus(err && err.message ? err.message : "Something went wrong.", true);
     toggleScoreBtn(true); // let the user retry
@@ -343,7 +400,8 @@ function fillFormInPage(values, answers) {
   const WORK_AUTH = /authoriz|work.?permit|eligible to work|right to work|legally.*work/i;
   const SPONSOR = /sponsor|visa|require.?spons/i;
   const DEMO = /gender|(^|[^a-z])sex\b|race|ethnic|hispanic|latino|veteran|disab/i;
-  const HARD_SKIP = /salary|compensation|expected.?pay|desired.?pay|date.?of.?birth|\bdob\b|ssn|social.?security/i;
+  const HARD_SKIP =
+    /salary|compensation|expected.?pay|desired.?pay|date.?of.?birth|\bdob\b|ssn|social.?security/i;
   const DECLINE = /decline|prefer not|don'?t wish|do not wish|not to (answer|disclose|identify)/i;
 
   function describe(el) {
@@ -362,16 +420,90 @@ function fillFormInPage(values, answers) {
   }
 
   function setInput(el, value) {
-    const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const proto =
+      el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(proto, "value").set.call(el, value);
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
   }
-  function setSelect(el, value) {
-    const want = value.toLowerCase();
-    const opt = Array.from(el.options).find(
-      (o) => o.text.toLowerCase().includes(want) || o.value.toLowerCase() === want,
+  // Common ISO country codes → the full names forms actually list. `country`
+  // arrives as a code ("US"); most selects show the name, some the code.
+  const ISO_COUNTRY = {
+    US: "United States",
+    CA: "Canada",
+    GB: "United Kingdom",
+    UK: "United Kingdom",
+    AU: "Australia",
+    IN: "India",
+    CN: "China",
+    DE: "Germany",
+    FR: "France",
+    SG: "Singapore",
+    JP: "Japan",
+    KR: "South Korea",
+    MX: "Mexico",
+    BR: "Brazil",
+    NL: "Netherlands",
+    IE: "Ireland",
+    ES: "Spain",
+    IT: "Italy",
+    CH: "Switzerland",
+    SE: "Sweden",
+    NZ: "New Zealand",
+    ZA: "South Africa",
+    IL: "Israel",
+    PL: "Poland",
+    PT: "Portugal",
+  };
+
+  function escapeRe(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  // Tiered text match: (a) exact case-insensitive equality of text OR value;
+  // else (b) startsWith / whole-word boundary; else null. Deliberately NO loose
+  // substring `includes` — that's what mis-selected (#32).
+  function matchOption(options, want) {
+    const w = (want || "").trim().toLowerCase();
+    if (!w) return null;
+    // (a) exact
+    let opt = options.find(
+      (o) => o.text.trim().toLowerCase() === w || o.value.trim().toLowerCase() === w,
     );
+    if (opt) return opt;
+    // (b) startsWith / word-boundary
+    const wb = new RegExp(`\\b${escapeRe(w)}\\b`);
+    opt = options.find((o) => {
+      const t = o.text.trim().toLowerCase();
+      const v = o.value.trim().toLowerCase();
+      return t.startsWith(w) || v.startsWith(w) || wb.test(t);
+    });
+    return opt || null;
+  }
+
+  function isCountrySelect(el) {
+    const s = [
+      el.name,
+      el.id,
+      el.getAttribute("aria-label"),
+      el.labels && el.labels[0] && el.labels[0].textContent,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return /country/.test(s);
+  }
+
+  function setSelect(el, value) {
+    const options = Array.from(el.options);
+    let opt;
+    const name = ISO_COUNTRY[(value || "").toUpperCase()];
+    if (isCountrySelect(el) && name) {
+      // country select + ISO code: try the full name first, then the raw code.
+      opt = matchOption(options, name) || matchOption(options, value);
+    } else {
+      opt = matchOption(options, value);
+    }
     if (!opt) return false;
     el.value = opt.value;
     el.dispatchEvent(new Event("change", { bubbles: true }));
@@ -390,6 +522,23 @@ function fillFormInPage(values, answers) {
   }
   function pickRadio(group, match) {
     const r = group.find((x) => match(radioLabel(x)));
+    if (!r) return false;
+    r.click();
+    return true;
+  }
+  // Tiered radio match by wanted value (same tiers as matchOption). Used for
+  // Yes/No sensitive answers so "Yes" doesn't loosely hit "Yes, with sponsorship".
+  function pickRadioValue(group, want) {
+    const w = (want || "").trim().toLowerCase();
+    if (!w) return false;
+    let r = group.find((x) => radioLabel(x).trim() === w);
+    if (!r) {
+      const wb = new RegExp(`\\b${escapeRe(w)}\\b`);
+      r = group.find((x) => {
+        const l = radioLabel(x).trim();
+        return l.startsWith(w) || wb.test(l);
+      });
+    }
     if (!r) return false;
     r.click();
     return true;
@@ -430,14 +579,21 @@ function fillFormInPage(values, answers) {
       skipped++;
       continue;
     }
-    const ok = ans === "__decline__" ? pickRadio(group, (l) => DECLINE.test(l)) : pickRadio(group, (l) => l.includes(ans.toLowerCase()));
+    const ok =
+      ans === "__decline__" ? pickRadio(group, (l) => DECLINE.test(l)) : pickRadioValue(group, ans);
     ok ? filled++ : skipped++;
   }
 
   // 2) Inputs / textareas / selects.
   for (const el of document.querySelectorAll("input, textarea, select")) {
-    if (el.type === "hidden" || el.type === "password" || el.type === "radio" || el.type === "checkbox" || el.disabled) continue;
-    if (el.type === "radio" && handledNames.has(el.name)) continue;
+    if (
+      el.type === "hidden" ||
+      el.type === "password" ||
+      el.type === "radio" ||
+      el.type === "checkbox" ||
+      el.disabled
+    )
+      continue;
     if (el.tagName !== "SELECT" && el.value) continue; // don't clobber what's there
     const desc = describe(el);
     if (!desc) continue;
@@ -496,14 +652,94 @@ async function autofill() {
       setStatus("No matching fields found on this page.", true);
       return;
     }
-    const note = skipped ? ` Left ${skipped} sensitive field${skipped > 1 ? "s" : ""} for you.` : "";
-    setStatus(`Filled ${filled} field${filled === 1 ? "" : "s"}.${note} Review before submitting.`, false);
+    const note = skipped
+      ? ` Left ${skipped} sensitive field${skipped > 1 ? "s" : ""} for you.`
+      : "";
+    setStatus(
+      `Filled ${filled} field${filled === 1 ? "" : "s"}.${note} Review before submitting.`,
+      false,
+    );
   } catch (err) {
     setStatus(err && err.message ? err.message : "Autofill failed.", true);
   }
 }
 
-// Inline generation: write a letter for the scored job, in the panel.
+// --- company research ------------------------------------------------------
+
+async function loadCompanyCache() {
+  const s = await chrome.storage.local.get(COMPANY_CACHE_KEY);
+  companyCache = s[COMPANY_CACHE_KEY] || {};
+}
+
+async function saveCompanyCache() {
+  const keys = Object.keys(companyCache);
+  if (keys.length > COMPANY_CACHE_MAX) {
+    for (const k of keys.slice(0, keys.length - COMPANY_CACHE_MAX)) delete companyCache[k];
+  }
+  await chrome.storage.local.set({ [COMPANY_CACHE_KEY]: companyCache });
+}
+
+// A brief is worth putting in the prompt only if it actually says something —
+// mirrors briefIsUseful() in core so we don't ship an empty object to the model.
+function briefIsUseful(b) {
+  if (!b) return false;
+  return Boolean(
+    b.oneLiner ||
+      (b.products && b.products.length) ||
+      (b.tech && b.tech.length) ||
+      (b.differentiators && b.differentiators.length),
+  );
+}
+
+/**
+ * Notes on what the company actually builds, read off their own site. Costs one
+ * AI call per company, so it's cached hard (7 days) — on a ~20 calls/day free
+ * tier, re-writing a letter for the same company must be free. A failure here is
+ * never fatal: we return null and the letter falls back to the JD alone.
+ */
+async function getCompanyBrief(job) {
+  const name = (job && job.company ? job.company : "").trim();
+  if (!name) return { brief: null, why: "no company name on this posting" };
+
+  const key = name.toLowerCase();
+  const hit = companyCache[key];
+  if (hit && Date.now() - hit.at < COMPANY_TTL_MS) {
+    return { brief: hit.brief, why: briefIsUseful(hit.brief) ? null : "couldn't find their site" };
+  }
+
+  els.genStatus.textContent = `Reading ${name}'s site…`;
+  try {
+    const res = await fetch(`${appUrl.replace(/\/+$/, "")}/api/company`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        company: name,
+        jobUrl: job.url || lastUrl || "",
+        jobText: job.description || "",
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    // Don't cache a failed CALL — that's transient (429/offline) and the next
+    // click should retry. An empty BRIEF is a real answer ("no findable site")
+    // and is cached, so it can't re-burn a call on every letter.
+    if (!res.ok || !data.brief) {
+      return { brief: null, why: data.error || `research failed (${res.status})` };
+    }
+
+    companyCache[key] = { at: Date.now(), brief: data.brief };
+    void saveCompanyCache();
+    return {
+      brief: data.brief,
+      why: briefIsUseful(data.brief) ? null : "couldn't find their site",
+    };
+  } catch {
+    return { brief: null, why: "couldn't reach OfferBen" };
+  }
+}
+
+// --- inline generation -----------------------------------------------------
+
+// Write a letter for the scored job, in the panel.
 async function genLetter(kind) {
   if (!currentJob) return;
   const profile = await getCachedProfile();
@@ -511,31 +747,92 @@ async function genLetter(kind) {
     show("connect");
     return;
   }
-  els.genOut.classList.add("hidden");
-  els.genCopy.classList.add("hidden");
+  resetGen();
   els.genStatus.textContent = "Writing…";
   try {
+    // Only the cover letter earns the extra call — a referral note is too short
+    // to spend product detail on, and a recruiter email wants brevity.
+    const research = kind === "coverLetter" ? await getCompanyBrief(currentJob) : null;
+    const brief = research ? research.brief : null;
+
+    els.genStatus.textContent = "Writing…";
     const res = await fetch(`${appUrl.replace(/\/+$/, "")}/api/letters`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profile, job: currentJob, kind }),
+      body: JSON.stringify({ profile, job: currentJob, kind, company: brief }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.text) throw new Error(data.error || `Failed (${res.status}).`);
+
+    lastLetter = { kind, text: data.text };
     els.genStatus.textContent = "";
     els.genOut.textContent = data.text;
     els.genOut.classList.remove("hidden");
-    els.genCopy.classList.remove("hidden");
+    els.genActions.classList.remove("hidden");
+
+    // Say where the company claims came from, so a wrong guess (someone else's
+    // acme.com) is visible rather than silently believed — and say when there
+    // were none, so a vague letter reads as explained rather than broken.
+    if (briefIsUseful(brief) && brief.website) {
+      els.genSource.textContent = `Company details from ${brief.website}`;
+      els.genSource.classList.remove("hidden");
+    } else if (research && research.why) {
+      els.genSource.textContent = `Written from the job post only — ${research.why}.`;
+      els.genSource.classList.remove("hidden");
+    }
   } catch (err) {
     els.genStatus.textContent = err && err.message ? err.message : "Failed.";
   }
 }
 
+// Typeset the letter server-side and drop the PDF in ~/Downloads. No AI call.
+async function savePdf() {
+  if (!lastLetter) return;
+  const profile = await getCachedProfile();
+  const prev = els.genPdf.textContent;
+  els.genPdf.textContent = "Saving…";
+  els.genPdf.disabled = true;
+  let objectUrl = null;
+  try {
+    const res = await fetch(`${appUrl.replace(/\/+$/, "")}/api/letters/pdf`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: lastLetter.text,
+        kind: lastLetter.kind,
+        profile,
+        jobTitle: currentJob ? currentJob.title : "",
+        company: currentJob ? currentJob.company : "",
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `PDF failed (${res.status}).`);
+    }
+    const filename = res.headers.get("X-Offerben-Filename") || "cover-letter.pdf";
+    objectUrl = URL.createObjectURL(await res.blob());
+    await chrome.downloads.download({ url: objectUrl, filename, saveAs: false });
+    els.genPdf.textContent = "Saved ✓";
+  } catch (err) {
+    els.genStatus.textContent = err && err.message ? err.message : "PDF failed.";
+    els.genPdf.textContent = prev;
+  } finally {
+    els.genPdf.disabled = false;
+    // Chrome reads the blob asynchronously; revoking immediately can truncate
+    // the download, so give it a beat.
+    if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    setTimeout(() => (els.genPdf.textContent = prev), 2000);
+  }
+}
+
 function resetGen() {
   if (!els.genOut) return;
+  lastLetter = null;
   els.genOut.classList.add("hidden");
   els.genOut.textContent = "";
-  els.genCopy.classList.add("hidden");
+  els.genActions.classList.add("hidden");
+  els.genSource.classList.add("hidden");
+  els.genSource.textContent = "";
   els.genStatus.textContent = "";
 }
 
@@ -544,7 +841,8 @@ async function tailorInOfferBen() {
   const job = { ...currentJob, url: lastUrl || "", source: currentJob.source || "extension" };
   // Pass along the score we already computed for this URL so the web app shows
   // the SAME number instead of re-scoring (consistent, and saves an AI call).
-  const match = (lastUrl && matchCache[lastUrl] && matchCache[lastUrl].match) || null;
+  const match =
+    (lastUrl && matchCache[cacheKey(lastUrl)] && matchCache[cacheKey(lastUrl)].match) || null;
   const base = appUrl.replace(/\/+$/, "");
   // Hand the job off via a short token, not the full JD in the URL (that
   // overflowed header limits → HTTP 431).
@@ -578,47 +876,52 @@ async function doConnect() {
 // we already scored this URL.
 async function previewJob() {
   try {
-  const tab = await getActiveTab();
-  const url = tab?.url || "";
-  toggleScoreBtn(false);
-  toggleImportBtn(false);
-  if (!tab || !tab.id || isUninjectable(url)) {
-    setJobLine(null);
-    setStatus("Open a job posting, then click Score.");
-    return;
-  }
-  if (isOwnApp(url)) {
-    setJobLine(null);
-    setStatus("You're in the OfferBen app. Open a job posting in another tab to score it.");
-    return;
-  }
-  if (isLinkedInProfile(url)) {
-    setJobLine(null);
-    setStatus("On a LinkedIn profile. Import it to build your OfferBen profile.");
-    toggleImportBtn(true);
-    return;
-  }
-  if (matchCache[url]) {
-    lastUrl = url;
-    currentJob = matchCache[url].job;
-    setJobLine(currentJob);
-    renderMatch(matchCache[url].match);
-    return;
-  }
-  const profile = await getCachedProfile();
-  const job = await readJob({ silent: true, allowVision: false }); // DOM only, no AI
-  if (job) {
-    currentJob = job;
-    lastUrl = url;
-    setJobLine(job);
-  }
-  if (!profile) {
-    show("connect");
+    const tab = await getActiveTab();
+    const url = tab?.url || "";
     toggleScoreBtn(false);
-    return;
-  }
-  setStatus(job ? "Ready — click Score to rate this job." : "No job detected here. Open a posting, then Score.");
-  toggleScoreBtn(true);
+    toggleImportBtn(false);
+    if (!tab || !tab.id || isUninjectable(url)) {
+      setJobLine(null);
+      setStatus("Open a job posting, then click Score.");
+      return;
+    }
+    if (isOwnApp(url)) {
+      setJobLine(null);
+      setStatus("You're in the OfferBen app. Open a job posting in another tab to score it.");
+      return;
+    }
+    if (isLinkedInProfile(url)) {
+      setJobLine(null);
+      setStatus("On a LinkedIn profile. Import it to build your OfferBen profile.");
+      toggleImportBtn(true);
+      return;
+    }
+    const key = cacheKey(url);
+    if (matchCache[key]) {
+      lastUrl = url;
+      currentJob = matchCache[key].job;
+      setJobLine(currentJob);
+      renderMatch(matchCache[key].match);
+      return;
+    }
+    const profile = await getCachedProfile();
+    const job = await readJob({ silent: true, allowVision: false }); // DOM only, no AI
+    if (job) {
+      currentJob = job;
+      lastUrl = url;
+      setJobLine(job);
+    }
+    if (!profile) {
+      show("connect");
+      toggleScoreBtn(false);
+      return;
+    }
+    setStatus(
+      job
+        ? "Ready — click Score to rate this job."
+        : "No job detected here. Open a posting, then Score.",
+    );
+    toggleScoreBtn(true);
   } catch (err) {
     setStatus("Open a job posting, then click Score.");
   }
@@ -647,19 +950,25 @@ async function init() {
   els.appUrl.value = appUrl;
   if (els.autoScore) els.autoScore.checked = autoScore;
   await loadCache();
+  await loadCompanyCache();
 
   els.reread.addEventListener("click", () => run({ force: true }));
   els.scoreBtn.addEventListener("click", () => run({ force: true }));
   els.importLi.addEventListener("click", importLinkedIn);
   els.open.addEventListener("click", tailorInOfferBen);
   document.getElementById("gen-cover").addEventListener("click", () => genLetter("coverLetter"));
-  document.getElementById("gen-recruiter").addEventListener("click", () => genLetter("recruiterEmail"));
-  document.getElementById("gen-referral").addEventListener("click", () => genLetter("referralNote"));
+  document
+    .getElementById("gen-recruiter")
+    .addEventListener("click", () => genLetter("recruiterEmail"));
+  document
+    .getElementById("gen-referral")
+    .addEventListener("click", () => genLetter("referralNote"));
   els.genCopy.addEventListener("click", () => {
     navigator.clipboard.writeText(els.genOut.textContent || "").catch(() => {});
     els.genCopy.textContent = "Copied!";
     setTimeout(() => (els.genCopy.textContent = "Copy"), 1500);
   });
+  els.genPdf.addEventListener("click", savePdf);
   document.getElementById("autofill").addEventListener("click", autofill);
   els.connectBtn.addEventListener("click", doConnect);
   els.resync.addEventListener("click", doConnect);

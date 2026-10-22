@@ -8,7 +8,7 @@
 
 ## What this is
 
-OfferBen — an AI job-application copilot. One structured profile → a 
+OfferBen — an AI job-application copilot. One structured profile → a
 tailored resume, cover letter, recruiter email, referral content, a
 match score, an application tracker, and "research a person" (a hiring manager /
 referrer's schools, labs, papers, research taste). A Chrome **side-panel
@@ -44,6 +44,7 @@ npm run typecheck    # tsc --noEmit across all workspaces — run before committ
 npm test             # Vitest (unit tests for pure core logic) — run before committing
 npm run lint         # eslint . across the monorepo (npm run lint:fix to autofix)
 ```
+
 Node 20+ (developed on Node via Homebrew). Extension: load `apps/extension`
 unpacked at `chrome://extensions` (Developer mode). See `apps/extension/README.md`.
 
@@ -52,22 +53,30 @@ unpacked at `chrome://extensions` (Developer mode). See `apps/extension/README.m
 1. **Secrets stay server-side — except the user's own BYOK key.** The DEV/server
    env key (`GEMINI_API_KEY` / `AI_API_KEY`) is read ONLY in `apps/web/app/api/**`
    via `createAIProvider()` and never shipped to the client. A USER's own BYOK key
-   is different: it lives in *their* browser (localStorage `offerben.ai.v1`), is
+   is different: it lives in _their_ browser (localStorage `offerben.ai.v1`), is
    sent per-request as `x-offerben-*` headers, used for that one call, and NEVER
    persisted or logged server-side (`aiConfigFromHeaders` → `createAIProvider(cfg)`,
    falling back to env). Don't log these headers.
 2. **Client imports types-only from core.** `apps/web/lib/types.ts` re-exports
-   core types with `export type`. Importing a core *runtime value* into a client
+   core types with `export type`. Importing a core _runtime value_ into a client
    component pulls the Gemini SDK into the browser bundle. If you need a runtime
    constant client-side, define a local copy (see `APPLICATION_STATUSES`).
 3. **AI is provider-agnostic.** Everything depends on the `AIProvider` interface
    (`packages/core/src/ai/provider.ts`). Pick the backend with env vars
    (`AI_PROVIDER`), never hardcode a model in business logic. Gemini is the
    default; `OpenAICompatibleProvider` covers OpenAI/Groq/OpenRouter/Ollama/etc.
-4. **No scraping.** We read the page the user is actively viewing, user-initiated,
-   single-page — via the extension's content script (DOM) or a screenshot+vision
-   fallback. No server-side fetching of job sites, no bulk crawling, no LinkedIn
-   automation (likes/comments/connections). This is a hard product + legal line.
+4. **No scraping of job sites or gated platforms.** Job content comes from the
+   page the user is actively viewing, user-initiated, single-page — via the
+   extension's content script (DOM) or a screenshot+vision fallback. No
+   server-side fetching of job boards or aggregators, no bulk crawling, no
+   LinkedIn automation (likes/comments/connections). Still a hard line.
+   **One narrow, deliberate exception** (`company/research.ts`): to ground a
+   cover letter in what a company actually builds, we fetch up to 4 pages from
+   that company's OWN public marketing site. It is user-initiated (clicking
+   "Cover letter"), one company at a time, identifies itself in the User-Agent,
+   and is cached 7 days client-side + 24h server-side so a company is read once.
+   Don't widen it: no job boards, nothing gated or behind auth, nothing on a
+   schedule, no second company per click.
 5. **Least-privilege Drive.** Google Drive sync uses the `drive.file` scope only
    (the app sees just the one `offerben-data.json` it creates). Don't widen it.
 6. **Submission has a human review gate.** Autofill fills + reports; it never
@@ -81,16 +90,19 @@ unpacked at `chrome://extensions` (Developer mode). See `apps/extension/README.m
   (`createAIProvider` factory, env-driven).
 - `schema/` — Zod schemas: profile (JSON-Resume based), job, match, generation.
 - `profile/extract.ts`, `jd/parse.ts`, `jd/vision.ts`, `match/score.ts`,
-  `tailor/resume.ts`, `tailor/letters.ts`, `people/research.ts` (OpenAlex).
+  `tailor/resume.ts`, `tailor/letters.ts`, `people/research.ts` (OpenAlex),
+  `company/research.ts` (company's own site → `CompanyBrief`, see invariant #4).
 - `storage/` — `ProfileStore` interface + `GoogleDriveStore`, `AppData` shape
   (profile + job + applications), shared by web + extension.
 
 ## Web API routes (`apps/web/app/api`)
 
 `profile/extract`, `match` (1 AI call — derives keywords from the result),
-`tailor`, `letters`, `capture` (screenshot→vision), `people/search` (OpenAlex,
-no AI), `people/dossier` (OpenAlex + AI taste). All wrapped by `lib/server.ts`
-`jsonHandler` (uniform JSON errors).
+`tailor`, `letters` (takes an optional `company` brief), `company` (site crawl +
+1 AI call, LRU-cached per company), `capture` (screenshot→vision),
+`people/search` (OpenAlex, no AI), `people/dossier` (OpenAlex + AI taste). All
+wrapped by `lib/server.ts` `jsonHandler` (uniform JSON errors) — except
+`letters/pdf`, which returns `application/pdf` and so repeats the guard inline.
 
 ## Gotchas
 
@@ -101,6 +113,17 @@ no AI), `people/dossier` (OpenAlex + AI taste). All wrapped by `lib/server.ts`
   `AI_PROVIDER=openai` with a different backend. See `.env.example`.
 - **Vision fallback costs a call**, so it's gated to explicit open/⟳, not silent
   navigations.
+- **Company research costs a call too**, so only the cover letter triggers it
+  (not the recruiter email or referral note), and the brief is cached hard on
+  both sides. A failed lookup is cached as an empty brief on purpose — a company
+  with no findable site must not re-burn a call on every letter.
+- **`resolveCompanySite` scores candidates, it doesn't take the first hit.** That
+  matters: first-match-wins resolved "Figure AI" to figure.com (a mortgage
+  lender) and "Nimo Technology" to a domain-parking page. Below `MIN_CONFIDENCE`
+  it returns null and the letter is written from the JD alone — no company
+  context beats the wrong company's.
+- **`letters/pdf` costs nothing** — it's pure typesetting (`@react-pdf/renderer`
+  server-side) of text the user already has.
 - Run `npm run typecheck` AND `npm test` before committing. Tests cover pure core
   logic (`packages/core/test/`); add a test when you add a pure function.
 
@@ -108,7 +131,7 @@ no AI), `people/dossier` (OpenAlex + AI taste). All wrapped by `lib/server.ts`
 
 - TypeScript everywhere in web/core; the extension is intentionally plain JS
   (no bundler) — keep injected scripts self-contained.
-- Match the surrounding code's style; comments explain *why*, not *what*.
+- Match the surrounding code's style; comments explain _why_, not _what_.
 - Shared agent config lives in `.claude/` (committed): `settings.json` wires two
   hooks — auto-format + lint-fix on edited files (Prettier, then `eslint --fix`;
   `hooks/format.sh`) and a Bash guard that
@@ -116,3 +139,9 @@ no AI), `people/dossier` (OpenAlex + AI taste). All wrapped by `lib/server.ts`
   `settings.local.json` and `CLAUDE.local.md` personal (git-ignored).
 - Work is tracked in GitHub Issues (labels P1/P2/P3 + area); `docs/ISSUES.md` is
   the seed list.
+
+## 工具约定
+
+- 需要读文件内容或 grep 时,优先委派 `file-reader` subagent(Sonnet)去做,
+  不要用主模型直接 Read/Grep 大文件,以节省 token。(定义在
+  `.claude/agents/file-reader.md`;例外:即将 Edit 的文件仍需主模型直接 Read。)

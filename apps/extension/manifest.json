@@ -3,7 +3,7 @@
   "name": "OfferBen — Job Copilot",
   "version": "0.2.0",
   "description": "A side-panel copilot that reads the job you're viewing and tailors your application — your data stays in your own Google Drive.",
-  "permissions": ["activeTab", "scripting", "storage", "sidePanel", "tabs", "identity"],
+  "permissions": ["activeTab", "scripting", "storage", "sidePanel", "tabs", "identity", "downloads"],
   "host_permissions": ["https://*/*", "http://*/*"],
   "background": { "service_worker": "background.js" },
   "action": {

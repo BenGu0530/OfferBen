@@ -7,6 +7,13 @@ export * from "./ai/index";
 // Operations
 export { extractProfile, type ExtractProfileInput } from "./profile/extract";
 export { parseJob } from "./jd/parse";
+export {
+  researchCompany,
+  resolveCompanySite,
+  briefIsUseful,
+  htmlToText,
+  type CompanyResearchInput,
+} from "./company/research";
 export { extractJobFromImage, type CapturedJob } from "./jd/vision";
 export {
   searchAuthors,
